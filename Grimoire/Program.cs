@@ -21,6 +21,9 @@ namespace Grimoire
 		
 		// Flag to indicate if this is a spawned instance
 		public static bool IsSpawnedInstance { get; private set; }
+		
+		// Snap zone for this instance (if set via command line)
+		public static int SnapZone { get; private set; } = 0;
 
 		[STAThread]
 		private static void Main(string[] args)
@@ -69,6 +72,7 @@ namespace Grimoire
 				string password = null;
 				string server = null;
 				string script = null;
+				int snapzone = 0;
 
 				// Parse command-line arguments
 				for (int i = 0; i < args.Length; i++)
@@ -81,7 +85,12 @@ namespace Grimoire
 						server = args[i].Substring("--server=".Length).Trim('"');
 					else if (args[i].StartsWith("--script="))
 						script = args[i].Substring("--script=".Length).Trim('"');
+					else if (args[i].StartsWith("--snapzone="))
+						int.TryParse(args[i].Substring("--snapzone=".Length), out snapzone);
 				}
+
+				// Store snap zone globally
+				SnapZone = snapzone;
 
 				// Log what we received for debugging
 				System.Diagnostics.Debug.WriteLine($"[ParseAndSetupAutoLogin] Received arguments:");
@@ -89,6 +98,7 @@ namespace Grimoire
 				System.Diagnostics.Debug.WriteLine($"[ParseAndSetupAutoLogin]   Password: {(string.IsNullOrEmpty(password) ? "(null)" : new string('*', password.Length))}");
 				System.Diagnostics.Debug.WriteLine($"[ParseAndSetupAutoLogin]   Server: {server ?? "(null)"}");
 				System.Diagnostics.Debug.WriteLine($"[ParseAndSetupAutoLogin]   Script: {script ?? "(null)"}");
+				System.Diagnostics.Debug.WriteLine($"[ParseAndSetupAutoLogin]   SnapZone: {snapzone}");
 
 				// Set credentials in OptionsManager (static properties)
 				if (!string.IsNullOrEmpty(username))

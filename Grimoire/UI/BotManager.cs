@@ -3991,6 +3991,9 @@ namespace Grimoire.UI
                 skill.SafeValue2 = (int)numAuraSafeValue2.Value;
             }
             
+            // Add aura-based waiting if Wait checkbox is checked
+
+            
             AddSkill(skill, (ModifierKeys & Keys.Control) == Keys.Control);
         }
 
@@ -4032,7 +4035,8 @@ namespace Grimoire.UI
             {
                 Text = textValue,
                 Index = cmdIndex,
-                Type = Skill.SkillType.Label
+                Type = Skill.SkillType.Label,
+                waitCd = chkSkillsWait.Checked
             };
             
             // Add HP/MP conditions if selected
@@ -4090,7 +4094,8 @@ namespace Grimoire.UI
             {
                 Text = textValue,
                 Index = cmdIndex,
-                Type = Skill.SkillType.Label
+                Type = Skill.SkillType.Label,
+                waitCd = chkSkillsWait.Checked
             };
             
             // Add HP/MP conditions if selected
@@ -4148,7 +4153,8 @@ namespace Grimoire.UI
             {
                 Text = textValue,
                 Index = cmdIndex,
-                Type = Skill.SkillType.Label
+                Type = Skill.SkillType.Label,
+                waitCd = chkSkillsWait.Checked
             };
             
             // Add HP/MP conditions if selected

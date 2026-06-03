@@ -80,7 +80,7 @@ namespace Grimoire.Game.Data
             if (s.Type == Skill.SkillType.Label)
             {
                 // Handle statement commands (aura checks)
-                ExecuteStatementCommand();
+                await ExecuteStatementCommand();
             }
             else if (s.Type == Skill.SkillType.Safe)
             {
@@ -186,7 +186,7 @@ namespace Grimoire.Game.Data
             }
         }
 
-        private void ExecuteStatementCommand()
+        private async System.Threading.Tasks.Task ExecuteStatementCommand()
         {
             UI.LogForm.Instance.AppendDebug($"[AuraStmt] Executing: {Index} - Text: {Text}");
             
@@ -210,6 +210,14 @@ namespace Grimoire.Game.Data
                 return;
             }
             string skillIndex = parts[2].Trim();
+            
+            // Check if waitCd is enabled - if so, keep pressing the skill until aura condition is met
+            if (waitCd)
+            {
+                UI.LogForm.Instance.AppendDebug($"[AuraStmt] waitCd enabled - will keep pressing skill {skillIndex} until aura condition is met");
+                await WaitForAuraToReachLevel(skillIndex, auraName, auraValue, 1);
+                return;
+            }
             
             // Check for multi-aura parameters
             string aura2Name = null;
@@ -449,6 +457,76 @@ namespace Grimoire.Game.Data
                     Player.UseSkill(Index);
                 }
             });
+        }
+
+        private async System.Threading.Tasks.Task WaitForAuraToReachLevel(string skillIndex, string auraName, int targetLevel, int repeatCount)
+        {
+            UI.LogForm.Instance.AppendDebug($"[WaitForAuraToReachLevel] Starting - Skill: {skillIndex}, Aura: {auraName}, Target: {targetLevel}, Repeats: {repeatCount}");
+
+            for (int cycle = 1; cycle <= repeatCount; cycle++)
+            {
+                UI.LogForm.Instance.AppendDebug($"[WaitForAuraToReachLevel] === Cycle {cycle}/{repeatCount} ===");
+                
+                DateTime startTime = DateTime.Now;
+                int pressCount = 0;
+                bool targetReached = false;
+
+                // Keep pressing the skill until aura reaches target level
+                while (!targetReached && DateTime.Now.Subtract(startTime).TotalSeconds < 60) // 60 second timeout per cycle
+                {
+                    int currentAuraLevel = 0;
+                    UI.BotManager.Instance.Invoke((MethodInvoker)delegate
+                    {
+                        currentAuraLevel = Player.GetAuras(true, auraName);
+                    });
+
+                    if (currentAuraLevel >= targetLevel)
+                    {
+                        UI.LogForm.Instance.AppendDebug($"[WaitForAuraToReachLevel] ✓ Cycle {cycle}: Aura '{auraName}' reached level {currentAuraLevel} (target: {targetLevel}) after {pressCount} skill presses");
+                        targetReached = true;
+                        break;
+                    }
+
+                    // Press the skill
+                    UI.LogForm.Instance.AppendDebug($"[WaitForAuraToReachLevel] Pressing skill {skillIndex} - Current aura level: {currentAuraLevel}/{targetLevel}");
+                    
+                    UI.BotManager.Instance.Invoke((MethodInvoker)delegate
+                    {
+                        if (Player.EquippedClass.IndexOf("Chrono Shadow", StringComparison.OrdinalIgnoreCase) >= 0)
+                        {
+                            Player.ForceUseSkill(skillIndex);
+                        }
+                        else
+                        {
+                            Player.UseSkill(skillIndex);
+                        }
+                    });
+                    
+                    pressCount++;
+
+                    // Wait before pressing again
+                    await System.Threading.Tasks.Task.Delay(500);
+                }
+
+                if (!targetReached)
+                {
+                    int finalAuraLevel = 0;
+                    UI.BotManager.Instance.Invoke((MethodInvoker)delegate
+                    {
+                        finalAuraLevel = Player.GetAuras(true, auraName);
+                    });
+                    UI.LogForm.Instance.AppendDebug($"[WaitForAuraToReachLevel] ⏱ Cycle {cycle} timeout! Final aura level: {finalAuraLevel}/{targetLevel}");
+                }
+
+                if (cycle < repeatCount)
+                {
+                    // Add delay between cycles
+                    UI.LogForm.Instance.AppendDebug($"[WaitForAuraToReachLevel] Preparing for cycle {cycle + 1}...");
+                    await System.Threading.Tasks.Task.Delay(500);
+                }
+            }
+
+            UI.LogForm.Instance.AppendDebug($"[WaitForAuraToReachLevel] ✓ Completed all {repeatCount} cycles!");
         }
 
         public override string ToString()

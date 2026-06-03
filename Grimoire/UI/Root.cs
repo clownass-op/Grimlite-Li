@@ -100,6 +100,8 @@ namespace Grimoire.UI
         //public AxShockwaveFlash Client => flashPlayer;
 
         private string title = $"Grimlite Li";
+        private int _currentSnapZone = 0;
+        private Rectangle _originalBounds;
 
         public Root()
         {
@@ -116,6 +118,13 @@ namespace Grimoire.UI
 
         private void Root_Load(object sender, EventArgs e)
         {
+            // Apply snap zone if provided via command line
+            if (Program.SnapZone > 0)
+            {
+                SnapToZone(Program.SnapZone);
+                Debug.WriteLine($"[ROOT_LOAD] Applied snap zone: {Program.SnapZone}");
+            }
+            
             Task.Factory.StartNew(Proxy.Instance.Start, TaskCreationOptions.LongRunning);
             InitFlashMovie(ClientConfig.GetValue(ClientConfig.C_FLASH));
             Hotkeys.Instance.LoadHotkeys();
@@ -140,6 +149,78 @@ namespace Grimoire.UI
                 }
             }
             catch { }
+        }
+
+        private void SnapToZone(int zone)
+        {
+            // Apply snap zone to this Root window
+            if (zone == 0)
+            {
+                // Restore default
+                if (_originalBounds.Width > 0)
+                {
+                    this.Bounds = _originalBounds;
+                }
+                _currentSnapZone = 0;
+                return;
+            }
+
+            // Save original bounds if not already saved
+            if (_originalBounds.Width == 0)
+            {
+                _originalBounds = this.Bounds;
+            }
+
+            // Get the screen that this window is on
+            var screen = Screen.FromControl(this);
+            var workingArea = screen.WorkingArea;
+
+            int x = workingArea.X;
+            int y = workingArea.Y;
+            int width = workingArea.Width;
+            int height = workingArea.Height;
+
+            // Calculate snap zone dimensions
+            switch (zone)
+            {
+                case 1: // Top-Left Quarter
+                    width /= 2;
+                    height /= 2;
+                    break;
+                case 2: // Top-Right Quarter
+                    x += width / 2;
+                    width /= 2;
+                    height /= 2;
+                    break;
+                case 3: // Bottom-Left Quarter
+                    y += height / 2;
+                    width /= 2;
+                    height /= 2;
+                    break;
+                case 4: // Bottom-Right Quarter
+                    x += width / 2;
+                    y += height / 2;
+                    width /= 2;
+                    height /= 2;
+                    break;
+                case 5: // Left Half
+                    width /= 2;
+                    break;
+                case 6: // Right Half
+                    x += width / 2;
+                    width /= 2;
+                    break;
+                case 7: // Top Half
+                    height /= 2;
+                    break;
+                case 8: // Bottom Half
+                    y += height / 2;
+                    height /= 2;
+                    break;
+            }
+
+            _currentSnapZone = zone;
+            this.Bounds = new Rectangle(x, y, width, height);
         }
 
         private void ProcessStartupArgs(string[] args)

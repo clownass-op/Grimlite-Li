@@ -124,7 +124,7 @@ namespace Grimoire.UI
         private DarkTextBox tbScriptPath;
         private DarkButton btnBrowseScript;
         private DarkButton btnSetScriptDir;
-        private DarkCheckBox cbStartWithScript;
+        private DarkUI.Controls.DarkRadioButton cbStartWithScript;
         private TreeView treeScripts;
         private string _scriptBaseDir = string.Empty;
         private DarkLabel lblLastRefresh;
@@ -139,6 +139,11 @@ namespace Grimoire.UI
         // Add Account panel state
         private bool _addAccountExpanded = true;  // Default to expanded
         private DarkPanel _addPanelContainer;  // Reference for saving state
+        
+        // Snap zones state (for main window)
+        private int _currentSnapZone = 0;
+        private Rectangle _originalBounds;
+        private bool _autoSnapEnabled = false;  // Track if auto-snap is enabled
 
         private Config _config;
         private Config _charSelectConfig;  // Separate config for account management
@@ -770,23 +775,65 @@ namespace Grimoire.UI
 
     scriptPanel.Controls.Add(treePanel);
 
-    cbStartWithScript = new DarkCheckBox
+    cbStartWithScript = new DarkUI.Controls.DarkRadioButton
     {
-        Dock = DockStyle.Fill,
+        AutoSize = true,
+        BackColor = bgDark,
+        Checked = false,  // Default to unchecked
+        ForeColor = System.Drawing.Color.Gainsboro,
         Text = "Start with Script",
-        Font = new System.Drawing.Font("Segoe UI", 9f)
+        TabStop = true,
+        AutoCheck = false  // Disable automatic checking so we can toggle manually
     };
 
-    var cbHost = new DarkPanel
+    cbStartWithScript.Click += (s, e) =>
+    {
+        // Manual toggle
+        cbStartWithScript.Checked = !cbStartWithScript.Checked;
+    };
+
+    // Auto-Snap toggle - toggleable radio button
+    var rbAutoSnap = new DarkUI.Controls.DarkRadioButton
+    {
+        AutoSize = true,
+        BackColor = bgDark,
+        Checked = _autoSnapEnabled,
+        ForeColor = System.Drawing.Color.Gainsboro,
+        Text = "Auto-Snap",
+        TabStop = true,
+        AutoCheck = false  // Disable automatic checking so we can toggle manually
+    };
+
+    rbAutoSnap.Click += (s, e) =>
+    {
+        // Manual toggle
+        rbAutoSnap.Checked = !rbAutoSnap.Checked;
+        _autoSnapEnabled = rbAutoSnap.Checked;
+        _config.Contents["_autoSnapEnabled"] = _autoSnapEnabled.ToString();
+        _config.Save();
+    };
+
+    // Combined radio button row
+    var cbRow = new FlowLayoutPanel
     {
         Dock = DockStyle.Top,
-        Height = 26,
+        Height = 28,
         BackColor = bgDark,
-        BorderStyle = BorderStyle.None
+        FlowDirection = FlowDirection.LeftToRight,
+        WrapContents = false,
+        AutoScroll = false,
+        Padding = new Padding(4, 4, 0, 0)
     };
-    cbHost.Controls.Add(cbStartWithScript);
 
-    scriptPanel.Controls.Add(cbHost);
+    cbStartWithScript.Location = new System.Drawing.Point(0, 0);
+    rbAutoSnap.Location = new System.Drawing.Point(0, 0);
+    cbStartWithScript.Margin = new Padding(0, 0, 16, 0);
+    rbAutoSnap.Margin = new Padding(0, 0, 0, 0);
+
+    cbRow.Controls.Add(cbStartWithScript);
+    cbRow.Controls.Add(rbAutoSnap);
+
+    scriptPanel.Controls.Add(cbRow);
     scriptPanel.Controls.Add(scriptInputPanel);
     scriptPanel.Controls.Add(lblScript);
 
@@ -1189,6 +1236,11 @@ namespace Grimoire.UI
             _allRevealed = _config.Contents.ContainsKey("_allRevealed") && 
                           bool.TryParse(_config.Contents["_allRevealed"], out var savedRevealed) && 
                           savedRevealed;
+            
+            // Load snap state from config
+            _autoSnapEnabled = _config.Contents.ContainsKey("_autoSnapEnabled") && 
+                              bool.TryParse(_config.Contents["_autoSnapEnabled"], out var savedAutoSnap) && 
+                              savedAutoSnap;
             
             // Load Add Account expanded state from config
             _addAccountExpanded = !(_config.Contents.ContainsKey("_addAccountExpanded") && 
@@ -1877,6 +1929,14 @@ namespace Grimoire.UI
                 }
 
                 var selected = _selected.ToList();
+                
+                // Get snap zones if auto-snap is enabled
+                int[] snapZones = null;
+                if (_autoSnapEnabled)
+                {
+                    snapZones = GetSnapZonesForCount(selected.Count);
+                }
+                
                 int accountIndex = 0;
                 
                 foreach (int idx in selected)
@@ -1892,6 +1952,12 @@ namespace Grimoire.UI
                     if (accountIndex == 0)
                     {
                         Debug.WriteLine($"Logging first account into current instance: {username}");
+                        
+                        // Apply snap zone for first account if auto-snap enabled
+                        if (_autoSnapEnabled && snapZones != null && snapZones.Length > 0)
+                        {
+                            SnapToZone(snapZones[0]);
+                        }
                         
                         // Set credentials in OptionsManager first
                         OptionsManager.LoginUsername = username;
@@ -1974,6 +2040,12 @@ namespace Grimoire.UI
                             if (cbStartWithScript.Checked && !string.IsNullOrEmpty(tbScriptPath.Text) && File.Exists(tbScriptPath.Text))
                             {
                                 startInfo.Arguments += $" --script=\"{tbScriptPath.Text}\"";
+                            }
+                            
+                            // Add snap zone if auto-snap enabled
+                            if (_autoSnapEnabled && snapZones != null && accountIndex < snapZones.Length)
+                            {
+                                startInfo.Arguments += $" --snapzone={snapZones[accountIndex]}";
                             }
                             
                             startInfo.UseShellExecute = false;
@@ -2030,6 +2102,13 @@ namespace Grimoire.UI
                     return;
                 }
 
+                // Get snap zones if auto-snap is enabled
+                int[] snapZones = null;
+                if (_autoSnapEnabled)
+                {
+                    snapZones = GetSnapZonesForCount(_accounts.Count);
+                }
+
                 int accountIndex = 0;
                 
                 foreach (var acc in _accounts)
@@ -2041,6 +2120,12 @@ namespace Grimoire.UI
                     if (accountIndex == 0)
                     {
                         Debug.WriteLine($"Logging first account into current instance: {username}");
+                        
+                        // Apply snap zone for first account if auto-snap enabled
+                        if (_autoSnapEnabled && snapZones != null && snapZones.Length > 0)
+                        {
+                            SnapToZone(snapZones[0]);
+                        }
                         
                         // Set credentials in OptionsManager first
                         OptionsManager.LoginUsername = username;
@@ -2123,6 +2208,12 @@ namespace Grimoire.UI
                             if (cbStartWithScript.Checked && !string.IsNullOrEmpty(tbScriptPath.Text) && File.Exists(tbScriptPath.Text))
                             {
                                 startInfo.Arguments += $" --script=\"{tbScriptPath.Text}\"";
+                            }
+                            
+                            // Add snap zone if auto-snap enabled
+                            if (_autoSnapEnabled && snapZones != null && accountIndex < snapZones.Length)
+                            {
+                                startInfo.Arguments += $" --snapzone={snapZones[accountIndex]}";
                             }
                             
                             startInfo.UseShellExecute = false;
@@ -2401,6 +2492,130 @@ namespace Grimoire.UI
                 }
             }
             catch { }
+        }
+
+        private void ShowSnapZonesMenu(Control button)
+        {
+            var contextMenu = new ContextMenuStrip();
+            
+            contextMenu.Items.Add("Restore Default", null, (s, e) => SnapToZone(0));
+            contextMenu.Items.Add("-");
+            contextMenu.Items.Add("Top-Left Quarter", null, (s, e) => SnapToZone(1));
+            contextMenu.Items.Add("Top-Right Quarter", null, (s, e) => SnapToZone(2));
+            contextMenu.Items.Add("Bottom-Left Quarter", null, (s, e) => SnapToZone(3));
+            contextMenu.Items.Add("Bottom-Right Quarter", null, (s, e) => SnapToZone(4));
+            contextMenu.Items.Add("-");
+            contextMenu.Items.Add("Left Half", null, (s, e) => SnapToZone(5));
+            contextMenu.Items.Add("Right Half", null, (s, e) => SnapToZone(6));
+            contextMenu.Items.Add("Top Half", null, (s, e) => SnapToZone(7));
+            contextMenu.Items.Add("Bottom Half", null, (s, e) => SnapToZone(8));
+            contextMenu.Items.Add("-");
+            var autoSnapItem = contextMenu.Items.Add("Auto-Snap on Start", null, (s, e) => 
+            {
+                _autoSnapEnabled = !_autoSnapEnabled;
+                ((ToolStripMenuItem)contextMenu.Items[contextMenu.Items.Count - 1]).Checked = _autoSnapEnabled;
+            });
+            ((ToolStripMenuItem)autoSnapItem).Checked = _autoSnapEnabled;
+            
+            contextMenu.Show(button, new System.Drawing.Point(0, button.Height));
+        }
+
+        private void SnapToZone(int zone)
+        {
+            // Target the main Grimoire app window
+            var mainWindow = Root.Instance;
+            if (mainWindow == null) return;
+
+            if (zone == 0)
+            {
+                // Restore default
+                if (_originalBounds.Width > 0)
+                {
+                    mainWindow.Bounds = _originalBounds;
+                }
+                _currentSnapZone = 0;
+                return;
+            }
+
+            // Save original bounds if not already saved
+            if (_originalBounds.Width == 0)
+            {
+                _originalBounds = mainWindow.Bounds;
+            }
+
+            // Get the screen that the main window is on
+            var screen = Screen.FromControl(mainWindow);
+            var workingArea = screen.WorkingArea;
+
+            int x = workingArea.X;
+            int y = workingArea.Y;
+            int width = workingArea.Width;
+            int height = workingArea.Height;
+
+            // Calculate snap zone dimensions
+            switch (zone)
+            {
+                case 1: // Top-Left Quarter
+                    width /= 2;
+                    height /= 2;
+                    break;
+                case 2: // Top-Right Quarter
+                    x += width / 2;
+                    width /= 2;
+                    height /= 2;
+                    break;
+                case 3: // Bottom-Left Quarter
+                    y += height / 2;
+                    width /= 2;
+                    height /= 2;
+                    break;
+                case 4: // Bottom-Right Quarter
+                    x += width / 2;
+                    y += height / 2;
+                    width /= 2;
+                    height /= 2;
+                    break;
+                case 5: // Left Half
+                    width /= 2;
+                    break;
+                case 6: // Right Half
+                    x += width / 2;
+                    width /= 2;
+                    break;
+                case 7: // Top Half
+                    height /= 2;
+                    break;
+                case 8: // Bottom Half
+                    y += height / 2;
+                    height /= 2;
+                    break;
+            }
+
+            _currentSnapZone = zone;
+            mainWindow.Bounds = new Rectangle(x, y, width, height);
+        }
+
+        private int[] GetSnapZonesForCount(int accountCount)
+        {
+            switch (accountCount)
+            {
+                case 1:
+                    return new int[] { 0 }; // Single - restore default
+                case 2:
+                    return new int[] { 5, 6 }; // Left and Right halves
+                case 3:
+                    return new int[] { 5, 2, 4 }; // Left half, Top-Right Quarter, Bottom-Right Quarter
+                case 4:
+                    return new int[] { 1, 2, 3, 4 }; // All 4 quarters
+                default:
+                    // For more than 4, just use quarters repeated
+                    var zones = new List<int> { 1, 2, 3, 4 };
+                    for (int i = 4; i < accountCount; i++)
+                    {
+                        zones.Add(i % 4 + 1); // Cycle through quarters
+                    }
+                    return zones.ToArray();
+            }
         }
 
         private Tuple<string, string> PromptForCredentials()
