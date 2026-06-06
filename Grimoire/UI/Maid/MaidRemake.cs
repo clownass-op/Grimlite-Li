@@ -2177,6 +2177,38 @@ namespace Grimoire.UI.Maid
             if (cbAntiCounter.Checked)
                 Flash.FlashCall2 += AntiCounterHandler;
         }
+        private void cbBypassAll_CheckedChanged(object sender, EventArgs e)
+        {
+            bypassAll();
+        }
+        private void bypassAll()
+        {
+            if (!Player.IsLoggedIn)
+            {
+                cbBypassAll.Checked = false;
+                MessageBox.Show("You must be logged in to bypass all quests.", "Error", MessageBoxButtons.OK, MessageBoxIcon.Warning);
+                return;
+            }
+
+            if (cbBypassAll.Checked)
+            {
+                try
+                {
+                    string sekai = "world.myAvatar.objData.";
+                    for (int i = 1; i <= 7; i++)
+                    {
+                        string key = i == 1 ? "strQuests" : $"strQuests{i}";
+                        string ambatu = Flash.GetGameObject(sekai + key).Replace("\"", "");
+                        Flash.SetGameObject(sekai + key, new String('Z', ambatu.Length));
+                    }
+                }
+                catch (Exception ex)
+                {
+                    MessageBox.Show($"Error during bypass: {ex.Message}", "Error", MessageBoxButtons.OK, MessageBoxIcon.Error);
+                    cbBypassAll.Checked = false;
+                }
+            }
+        }
         private void cbSpecialAnims_CheckedChanged(object sender, EventArgs e)
         {
             tbSpecialMsg.Enabled = cbSpecialAnims.Checked;

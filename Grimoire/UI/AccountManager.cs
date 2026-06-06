@@ -395,7 +395,7 @@ namespace Grimoire.UI
     {
         Dock = DockStyle.Fill,
         BackColor = bgDark,
-        Padding = new Padding(6),
+        Padding = new Padding(0),
         BorderStyle = BorderStyle.None,
         ForeColor = outlineColor
     };
@@ -775,7 +775,7 @@ namespace Grimoire.UI
 
     scriptPanel.Controls.Add(treePanel);
 
-    cbStartWithScript = new DarkUI.Controls.DarkRadioButton
+    cbStartWithScript = new TransparentDarkRadioButton
     {
         AutoSize = true,
         BackColor = bgDark,
@@ -793,7 +793,7 @@ namespace Grimoire.UI
     };
 
     // Auto-Snap toggle - toggleable radio button
-    var rbAutoSnap = new DarkUI.Controls.DarkRadioButton
+    var rbAutoSnap = new TransparentDarkRadioButton
     {
         AutoSize = true,
         BackColor = bgDark,
@@ -890,8 +890,19 @@ namespace Grimoire.UI
     rightPanel.Controls.Add(addPanelContainer);
 
     // Add flowAccounts and buttons to leftPanel
+    var flowAccountsContainer = new DarkPanel
+    {
+        Dock = DockStyle.Fill,
+        BackColor = bgDark,
+        Padding = new Padding(0)
+    };
+    flowAccountsContainer.Controls.Add(flowAccounts);
+
     leftPanel.Controls.Add(bottomBar);
-    leftPanel.Controls.Add(flowAccounts);
+    leftPanel.Controls.Add(flowAccountsContainer);
+
+    BindCustomScrollBar(flowAccounts, flowAccountsContainer);
+    BindCustomScrollBar(flowServers, serversListContainer);
 
     mainSplit.Panel1.Controls.Add(leftPanel);
     mainSplit.Panel2.Controls.Add(rightPanel);
@@ -1453,6 +1464,7 @@ namespace Grimoire.UI
                             {
                                 Name = s.Name,
                                 PlayerCount = s.PlayerCount,
+                                MaxPlayers = s.MaxPlayers,
                                 IsOnline = s.IsOnline,
                                 Ip = string.IsNullOrWhiteSpace(s.Ip) ? "game.aq.com" : s.Ip,
                                 Port = s.Port > 0 ? s.Port : 443,
@@ -1697,7 +1709,9 @@ namespace Grimoire.UI
                 Top = 12,
                 Width = 8,
                 Height = 8,
-                BackColor = s.IsOnline ? System.Drawing.Color.FromArgb(80, 200, 120) : System.Drawing.Color.FromArgb(120, 120, 120),
+                BackColor = !s.IsOnline ? System.Drawing.Color.FromArgb(120, 120, 120) :
+                            (s.PlayerCount >= s.MaxPlayers && s.MaxPlayers > 0) ? System.Drawing.Color.FromArgb(220, 80, 80) :
+                            System.Drawing.Color.FromArgb(80, 200, 120),
                 Margin = new Padding(0)
             };
 
@@ -1740,6 +1754,8 @@ namespace Grimoire.UI
                     serverType = "English";
                 else if (s.Language.Equals("pt", StringComparison.OrdinalIgnoreCase))
                     serverType = "Portuguese";
+                else if (s.Language.Equals("it", StringComparison.OrdinalIgnoreCase))
+                    serverType = "Global";
                 else
                     serverType = s.Language.ToUpper();
             }
@@ -2645,6 +2661,163 @@ namespace Grimoire.UI
                 }
             }
             return null;
+        }
+
+        private void BindCustomScrollBar(FlowLayoutPanel panel, DarkPanel container)
+        {
+            var scrollBar = new DarkScrollBar
+            {
+                Width = 12,
+                ScrollOrientation = DarkScrollOrientation.Vertical,
+                Minimum = 0,
+                Maximum = 100,
+                Value = 0,
+                Visible = false
+            };
+
+            container.Controls.Add(scrollBar);
+            scrollBar.BringToFront();
+
+            panel.Dock = DockStyle.None;
+            panel.Left = 0;
+            panel.Top = 0;
+
+            Action updateLayout = () =>
+            {
+                if (panel.IsDisposed || container.IsDisposed) return;
+                
+                panel.Height = container.Height;
+                panel.Width = container.Width + SystemInformation.VerticalScrollBarWidth;
+
+                if (scrollBar.Visible)
+                {
+                    scrollBar.Left = container.Width - scrollBar.Width;
+                    scrollBar.Top = 0;
+                    scrollBar.Height = container.Height;
+                    scrollBar.BringToFront();
+                }
+            };
+
+            container.Resize += (s, e) => updateLayout();
+
+            scrollBar.ValueChanged += (s, e) =>
+            {
+                if (!panel.IsDisposed)
+                {
+                    panel.AutoScrollPosition = new Point(0, e.Value);
+                }
+            };
+
+            Action sync = () =>
+            {
+                if (panel.IsDisposed || scrollBar.IsDisposed) return;
+
+                scrollBar.Minimum = panel.VerticalScroll.Minimum;
+                scrollBar.Maximum = panel.VerticalScroll.Maximum;
+                scrollBar.ViewSize = panel.ClientSize.Height;
+                
+                int maxVal = scrollBar.Maximum - scrollBar.ViewSize;
+                int targetVal = panel.VerticalScroll.Value;
+                if (targetVal < scrollBar.Minimum) targetVal = scrollBar.Minimum;
+                if (targetVal > maxVal) targetVal = maxVal;
+                scrollBar.Value = targetVal;
+
+                bool shouldBeVisible = panel.VerticalScroll.Maximum > panel.ClientSize.Height;
+                if (scrollBar.Visible != shouldBeVisible)
+                {
+                    scrollBar.Visible = shouldBeVisible;
+                    updateLayout();
+                }
+                else if (scrollBar.Visible)
+                {
+                    scrollBar.BringToFront();
+                }
+            };
+
+            panel.Scroll += (s, e) => sync();
+            panel.MouseWheel += (s, e) => sync();
+            panel.SizeChanged += (s, e) => sync();
+            panel.ControlAdded += (s, e) => sync();
+            panel.ControlRemoved += (s, e) => sync();
+            panel.Layout += (s, e) => sync();
+            container.Layout += (s, e) => sync();
+
+            updateLayout();
+            sync();
+        }
+    }
+
+    public class TransparentDarkRadioButton : DarkUI.Controls.DarkRadioButton
+    {
+        protected override void OnPaint(PaintEventArgs e)
+        {
+            var g = e.Graphics;
+            var rect = new Rectangle(0, 0, ClientSize.Width, ClientSize.Height);
+
+            using (var b = new SolidBrush(BackColor))
+            {
+                g.FillRectangle(b, rect);
+            }
+
+            var size = 12;
+
+            var textColor = DarkUI.Config.Colors.LightText;
+            var borderColor = DarkUI.Config.Colors.LightText;
+            var fillColor = DarkUI.Config.Colors.LightestBackground;
+
+            bool isHovered = ClientRectangle.Contains(PointToClient(Cursor.Position));
+            bool isPressed = isHovered && (MouseButtons & MouseButtons.Left) != 0;
+
+            if (Enabled)
+            {
+                if (Focused || isHovered)
+                {
+                    borderColor = DarkUI.Config.Colors.BlueHighlight;
+                    fillColor = DarkUI.Config.Colors.BlueSelection;
+                }
+                if (isPressed)
+                {
+                    borderColor = DarkUI.Config.Colors.GreyHighlight;
+                    fillColor = DarkUI.Config.Colors.GreySelection;
+                }
+            }
+            else
+            {
+                textColor = DarkUI.Config.Colors.DisabledText;
+                borderColor = DarkUI.Config.Colors.GreyHighlight;
+                fillColor = DarkUI.Config.Colors.GreySelection;
+            }
+
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.HighQuality;
+
+            using (var p = new Pen(borderColor))
+            {
+                var boxRect = new Rectangle(0, (rect.Height / 2) - (size / 2), size, size);
+                g.DrawEllipse(p, boxRect);
+            }
+
+            if (Checked)
+            {
+                using (var b = new SolidBrush(fillColor))
+                {
+                    Rectangle boxRect = new Rectangle(3, (rect.Height / 2) - ((size - 7) / 2) - 1, size - 6, size - 6);
+                    g.FillEllipse(b, boxRect);
+                }
+            }
+
+            g.SmoothingMode = System.Drawing.Drawing2D.SmoothingMode.Default;
+
+            using (var b = new SolidBrush(textColor))
+            {
+                var stringFormat = new StringFormat
+                {
+                    LineAlignment = StringAlignment.Center,
+                    Alignment = StringAlignment.Near
+                };
+
+                var modRect = new Rectangle(size + 4, 0, rect.Width - size, rect.Height);
+                g.DrawString(Text, Font, b, modRect, stringFormat);
+            }
         }
     }
 }

@@ -53,6 +53,7 @@
             this.cbEnableGlobalHotkey = new DarkUI.Controls.DarkCheckBox();
             this.gbAdvancedOptions = new DarkUI.Controls.DarkGroupBox();
             this.cbAntiCounter = new DarkUI.Controls.DarkCheckBox();
+            this.cbBypassAll = new DarkUI.Controls.DarkCheckBox();
             this.cbCopyWalk = new DarkUI.Controls.DarkCheckBox();
             this.numHealthPercent = new DarkUI.Controls.DarkNumericUpDown();
             this.lbUseHeal2 = new DarkUI.Controls.DarkLabel();
@@ -351,6 +352,7 @@
             // gbAdvancedOptions
             // 
             this.gbAdvancedOptions.Controls.Add(this.cbAntiCounter);
+            this.gbAdvancedOptions.Controls.Add(this.cbBypassAll);
             this.gbAdvancedOptions.Controls.Add(this.cbCopyWalk);
             this.gbAdvancedOptions.Controls.Add(this.numHealthPercent);
             this.gbAdvancedOptions.Controls.Add(this.lbUseHeal2);
@@ -382,6 +384,16 @@
             this.cbAntiCounter.TabIndex = 29;
             this.cbAntiCounter.Text = "Anti Counter";
             this.cbAntiCounter.CheckedChanged += new System.EventHandler(this.cbAntiCounter_CheckedChanged);
+            // 
+            // cbBypassAll
+            // 
+            this.cbBypassAll.AutoSize = true;
+            this.cbBypassAll.Location = new System.Drawing.Point(105, 89);
+            this.cbBypassAll.Name = "cbBypassAll";
+            this.cbBypassAll.Size = new System.Drawing.Size(76, 17);
+            this.cbBypassAll.TabIndex = 30;
+            this.cbBypassAll.Text = "Bypass All";
+            this.cbBypassAll.CheckedChanged += new System.EventHandler(this.cbBypassAll_CheckedChanged);
             // 
             // cbCopyWalk
             // 
@@ -781,6 +793,7 @@
 		private DarkUI.Controls.DarkLabel darkLabel5;
 		private DarkUI.Controls.DarkComboBox cmbUltraBoss;
 		public DarkUI.Controls.DarkCheckBox cbAntiCounter;
+		public DarkUI.Controls.DarkCheckBox cbBypassAll;
 		private DarkUI.Controls.DarkCheckBox cbSpecialAnims;
 	}
 }
