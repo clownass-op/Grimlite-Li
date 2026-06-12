@@ -3180,6 +3180,14 @@ namespace Grimoire.UI
             }, (Control.ModifierKeys & Keys.Control) == Keys.Control);
         }
 
+        private void btnAddWebhook_Click(object sender, EventArgs e)
+        {
+            this.AddCommand(new CmdWebhook
+            {
+                Message = inputMsgClient.Text
+            }, (Control.ModifierKeys & Keys.Control) == Keys.Control);
+        }
+
         private void btnSetFPS_Click(object sender, EventArgs e)
         {
             Flash.Call("SetFPS", (int)numSetFPS.Value);

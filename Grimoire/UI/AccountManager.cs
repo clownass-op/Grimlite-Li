@@ -82,14 +82,15 @@ namespace Grimoire.UI
         private DarkLabel lblSelectedTop;
         private DarkLabel lblSelectedCount;
         private DarkNumericUpDown nudColumns;
-        private DarkComboBox cbServers;
+        public DarkTextBox tbWebhook;
         private FlowLayoutPanel flowServers;
         private DarkButton btnRefreshServers;
+        private Server _selectedServer;
         private DateTime _lastRefreshTime = DateTime.MinValue;
         private const int RefreshCooldownMs = 5000; // 5 second cooldown between manual refreshes
         private static readonly HttpClient _httpClient = CreateHttpClient();
 
-        private static HttpClient CreateHttpClient()
+        public static HttpClient CreateHttpClient()
         {
             var handler = new HttpClientHandler()
             {
@@ -197,7 +198,7 @@ namespace Grimoire.UI
 
     var lblLoginServer = new DarkLabel
     {
-        Text = "Login Server",
+        Text = "Discord Webhook",
         Dock = DockStyle.Top,
         Height = 20,
         AutoSize = false,
@@ -237,35 +238,40 @@ namespace Grimoire.UI
         Dock = DockStyle.Right,
         Width = 90,
         Height = 23,
-        Text = "Refresh"
+        Text = "Set"
     };
     btnRefreshServers.Click += async (s, e) =>
     {
-        // Rate limiting - prevent refresh spam
-        if ((DateTime.Now - _lastRefreshTime).TotalMilliseconds < RefreshCooldownMs)
+        string webhookUrl = tbWebhook.Text.Trim();
+        if (string.IsNullOrEmpty(webhookUrl))
         {
-            MessageBox.Show($"Please wait {RefreshCooldownMs / 1000} seconds between refreshes.");
+            MessageBox.Show("Please enter a Discord webhook URL.");
             return;
         }
-        
-        _lastRefreshTime = DateTime.Now;
+
+        // Save the webhook URL to config
+        ClientConfig.SetValue(ClientConfig.C_DISCORD_WEBHOOK, webhookUrl);
+
         btnRefreshServers.Enabled = false;
-        btnRefreshServers.Text = "Refreshing...";
+        btnRefreshServers.Text = "Sending...";
         
         try
         {
-            bool ok = await TryFetchServersAsync();
-            if (!ok)
-            {
-                await Task.Run(() =>
-                {
-                    try { AutoRelogin.ResetServers(); } catch { }
-                });
-            }
+            // Send test message to Discord webhook
+            var payload = new { content = "✅ Webhook is working correctly!" };
+            var json = Newtonsoft.Json.JsonConvert.SerializeObject(payload);
+            var content = new System.Net.Http.StringContent(json, System.Text.Encoding.UTF8, "application/json");
+            var response = await _httpClient.PostAsync(webhookUrl, content);
+            response.EnsureSuccessStatusCode();
+            MessageBox.Show("Webhook test message sent successfully!");
+        }
+        catch (Exception ex)
+        {
+            MessageBox.Show($"Failed to send webhook message: {ex.Message}");
         }
         finally
         {
-            btnRefreshServers.Text = "Refresh";
+            btnRefreshServers.Text = "Set";
             btnRefreshServers.Enabled = true;
         }
     };
@@ -318,52 +324,23 @@ namespace Grimoire.UI
         BackColor = bgDark
     };
 
-    cbServers = new DarkComboBox
-    {
-        Width = comboContainer.Width,
-        Top = 0,
-        Left = 0,
-        Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top,
-        DropDownStyle = ComboBoxStyle.DropDownList,
-        Font = new System.Drawing.Font("Segoe UI", 9f)
-    };
-    cbServers.DisplayMember = "Name";
-    
-    cbServers.SelectedIndexChanged += (s, e) =>
-    {
-        if (cbServers.SelectedItem is Server s1)
-        {
-            try { Proxy.Instance.DestinationServerOverride = s1; } catch { }
-            try
+    tbWebhook = new DarkTextBox
             {
-                if (flowServers != null && !flowServers.IsDisposed)
-                {
-                    foreach (Control c in flowServers.Controls)
-                    {
-                        if (c.Tag is Server ss && ss == s1)
-                        {
-                            c.BackColor = System.Drawing.Color.FromArgb(60, 80, 120);
-                            try { flowServers.ScrollControlIntoView(c); } catch { }
-                        }
-                        else
-                        {
-                            c.BackColor = System.Drawing.Color.FromArgb(50, 50, 62);
-                        }
-                    }
-                }
-            }
-            catch { }
-        }
-    };
+                Width = comboContainer.Width,
+                Top = 0,
+                Left = 0,
+                Anchor = AnchorStyles.Left | AnchorStyles.Right | AnchorStyles.Top,
+                Font = new System.Drawing.Font("Segoe UI", 9f)
+            };
 
-    // Force combo to resize with container
+    // Force textbox to resize with container
     comboContainer.Resize += (s, e) => 
     {
-        if (cbServers != null && !cbServers.IsDisposed)
-            cbServers.Width = Math.Max(50, comboContainer.Width);
+        if (tbWebhook != null && !tbWebhook.IsDisposed)
+            tbWebhook.Width = Math.Max(50, comboContainer.Width);
     };
 
-    comboContainer.Controls.Add(cbServers);
+    comboContainer.Controls.Add(tbWebhook);
     // Add in right-to-left order: Button (rightmost), Spacer, Combobox (fills left)
     serverRow.Controls.Add(comboContainer);
     serverRow.Controls.Add(serverSpacer);
@@ -930,6 +907,7 @@ namespace Grimoire.UI
 
     LoadAccounts();
     LoadScriptDirectory();
+    LoadWebhook();
     // Don't load defaults here - let the API load real data first
 
     // Setup auto-refresh timer for server player counts (every 30 seconds)
@@ -952,7 +930,7 @@ namespace Grimoire.UI
             //LogForm.Instance.AppendDebug("[FORM LOAD] Starting server load on form load");
             
             // Show loading state while fetching
-            if (cbServers != null) cbServers.Text = "Loading servers...";
+            //if (cbServers != null) cbServers.Text = "Loading servers...";
             
             // Fetch servers immediately and wait for result
             bool ok = await TryFetchServersAsync();
@@ -1645,13 +1623,13 @@ namespace Grimoire.UI
 
             try
             {
-                //LogForm.Instance.AppendDebug($"[ON SERVERS LOADED] Clearing {cbServers.Items.Count} combo items and {flowServers.Controls.Count} flow items");
+                //LogForm.Instance.AppendDebug($"[ON SERVERS LOADED] Clearing combo items and {flowServers.Controls.Count} flow items");
                 
-                cbServers.Items.Clear();
+                //cbServers.Items.Clear();
                 flowServers.Controls.Clear();
 
-                cbServers.Items.AddRange(servers);
-                //LogForm.Instance.AppendDebug($"[ON SERVERS LOADED] Added {cbServers.Items.Count} items to combo");
+                //cbServers.Items.AddRange(servers);
+                //LogForm.Instance.AppendDebug($"[ON SERVERS LOADED] Added items to combo");
 
                 foreach (var s in servers)
                 {
@@ -1668,16 +1646,16 @@ namespace Grimoire.UI
                 
                 //LogForm.Instance.AppendDebug($"[ON SERVERS LOADED] Flow panel now has {flowServers.Controls.Count} controls");
 
-                if (cbServers.SelectedIndex < 0 && cbServers.Items.Count > 0)
+                if (_selectedServer == null && flowServers.Controls.Count > 0)
                 {
-                    //LogForm.Instance.AppendDebug("[ON SERVERS LOADED] Setting selected index to 0");
-                    cbServers.SelectedIndex = 0;
+                    //LogForm.Instance.AppendDebug("[ON SERVERS LOADED] Setting selected server to first one");
+                    _selectedServer = servers[0];
                 }
 
-                if (flowServers.Controls.Count > 0 && cbServers.SelectedItem is Server sel)
+                if (flowServers.Controls.Count > 0)
                 {
                     foreach (Control c in flowServers.Controls)
-                        c.BackColor = (c.Tag as Server) == sel ? System.Drawing.Color.FromArgb(60, 80, 120) : System.Drawing.Color.FromArgb(50, 50, 62);
+                        c.BackColor = (c.Tag as Server) == _selectedServer ? System.Drawing.Color.FromArgb(60, 80, 120) : System.Drawing.Color.FromArgb(50, 50, 62);
                 }
                 
                 //LogForm.Instance.AppendDebug("[ON SERVERS LOADED] Completed successfully");
@@ -1797,15 +1775,18 @@ namespace Grimoire.UI
 
             panel.Click += (se, ev) =>
             {
-                cbServers.SelectedItem = s;
+                _selectedServer = s;
+                // Update all server items' background colors
+                foreach (Control c in flowServers.Controls)
+                    c.BackColor = (c.Tag as Server) == _selectedServer ? System.Drawing.Color.FromArgb(60, 80, 120) : System.Drawing.Color.FromArgb(50, 50, 62);
             };
 
-            lblName.Click += (se, ev) => { cbServers.SelectedItem = s; flowServers.ScrollControlIntoView(panel); };
-            lblType.Click += (se, ev) => { cbServers.SelectedItem = s; flowServers.ScrollControlIntoView(panel); };
-            lblCount.Click += (se, ev) => { cbServers.SelectedItem = s; flowServers.ScrollControlIntoView(panel); };
+            lblName.Click += (se, ev) => { _selectedServer = s; foreach (Control c in flowServers.Controls) c.BackColor = (c.Tag as Server) == _selectedServer ? System.Drawing.Color.FromArgb(60, 80, 120) : System.Drawing.Color.FromArgb(50, 50, 62); flowServers.ScrollControlIntoView(panel); };
+            lblType.Click += (se, ev) => { _selectedServer = s; foreach (Control c in flowServers.Controls) c.BackColor = (c.Tag as Server) == _selectedServer ? System.Drawing.Color.FromArgb(60, 80, 120) : System.Drawing.Color.FromArgb(50, 50, 62); flowServers.ScrollControlIntoView(panel); };
+            lblCount.Click += (se, ev) => { _selectedServer = s; foreach (Control c in flowServers.Controls) c.BackColor = (c.Tag as Server) == _selectedServer ? System.Drawing.Color.FromArgb(60, 80, 120) : System.Drawing.Color.FromArgb(50, 50, 62); flowServers.ScrollControlIntoView(panel); };
 
-            panel.MouseEnter += (se, ev) => { if (cbServers.SelectedItem as Server != s) panel.BackColor = System.Drawing.Color.FromArgb(55, 55, 70); };
-            panel.MouseLeave += (se, ev) => { if (cbServers.SelectedItem as Server != s) panel.BackColor = System.Drawing.Color.FromArgb(50, 50, 62); };
+            panel.MouseEnter += (se, ev) => { if (_selectedServer != s) panel.BackColor = System.Drawing.Color.FromArgb(55, 55, 70); };
+            panel.MouseLeave += (se, ev) => { if (_selectedServer != s) panel.BackColor = System.Drawing.Color.FromArgb(50, 50, 62); };
 
             return panel;
         }
@@ -1933,13 +1914,7 @@ namespace Grimoire.UI
 
             try
             {
-                if (cbServers == null || cbServers.IsDisposed)
-                {
-                    MessageBox.Show("Server selector not available.");
-                    return;
-                }
-
-                var server = cbServers.SelectedItem as Server;
+                var server = _selectedServer;
                 if (server == null)
                 {
                     MessageBox.Show("Please select a server first.");
@@ -2101,13 +2076,7 @@ namespace Grimoire.UI
         {
             try
             {
-                if (cbServers == null || cbServers.IsDisposed)
-                {
-                    MessageBox.Show("Server selector not available.");
-                    return;
-                }
-
-                var server = cbServers.SelectedItem as Server;
+                var server = _selectedServer;
                 if (server == null)
                 {
                     MessageBox.Show("Please select a server first.");
@@ -2468,6 +2437,22 @@ namespace Grimoire.UI
             catch (Exception ex)
             {
                 Debug.WriteLine($"Error loading script directory: {ex.Message}");
+            }
+        }
+
+        private void LoadWebhook()
+        {
+            try
+            {
+                string savedWebhook = ClientConfig.GetValue(ClientConfig.C_DISCORD_WEBHOOK);
+                if (!string.IsNullOrEmpty(savedWebhook))
+                {
+                    tbWebhook.Text = savedWebhook;
+                }
+            }
+            catch (Exception ex)
+            {
+                Debug.WriteLine($"Error loading webhook: {ex.Message}");
             }
         }
 

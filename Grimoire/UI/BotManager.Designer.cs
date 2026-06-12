@@ -205,6 +205,7 @@ namespace Grimoire.UI
 		private DarkButton btnSpecialSwitch;
 		private DarkButton btnAddInfoMsg;
 		private DarkButton btnAddWarnMsg;
+		private DarkButton btnAddWebhook;
 		private DarkTextBox inputMsgClient;
 		private Panel panel4;
 		private DarkGroupBox darkGroupBox1;
@@ -641,6 +642,7 @@ namespace Grimoire.UI
             this.groupBox1 = new DarkUI.Controls.DarkGroupBox();
             this.btnAddInfoMsg = new DarkUI.Controls.DarkButton();
             this.btnAddWarnMsg = new DarkUI.Controls.DarkButton();
+            this.btnAddWebhook = new DarkUI.Controls.DarkButton();
             this.inputMsgClient = new DarkUI.Controls.DarkTextBox();
             this.grpAccessLevel = new DarkUI.Controls.DarkGroupBox();
             this.chkToggleMute = new DarkUI.Controls.DarkCheckBox();
@@ -4395,7 +4397,7 @@ namespace Grimoire.UI
             // 
             this.darkGroupBox27.Controls.Add(this.tbLoadMap);
             this.darkGroupBox27.Controls.Add(this.btnLoadMap);
-            this.darkGroupBox27.Location = new System.Drawing.Point(196, 165);
+            this.darkGroupBox27.Location = new System.Drawing.Point(196, 200);
             this.darkGroupBox27.Name = "darkGroupBox27";
             this.darkGroupBox27.Size = new System.Drawing.Size(124, 64);
             this.darkGroupBox27.TabIndex = 176;
@@ -4686,15 +4688,26 @@ namespace Grimoire.UI
             // 
             // groupBox1
             // 
+            this.groupBox1.Controls.Add(this.btnAddWebhook);
             this.groupBox1.Controls.Add(this.btnAddInfoMsg);
             this.groupBox1.Controls.Add(this.btnAddWarnMsg);
             this.groupBox1.Controls.Add(this.inputMsgClient);
             this.groupBox1.Location = new System.Drawing.Point(196, 72);
             this.groupBox1.Name = "groupBox1";
-            this.groupBox1.Size = new System.Drawing.Size(124, 92);
+            this.groupBox1.Size = new System.Drawing.Size(124, 120);
             this.groupBox1.TabIndex = 148;
             this.groupBox1.TabStop = false;
             this.groupBox1.Text = "Messages";
+            // 
+            // btnAddWebhook
+            // 
+            this.btnAddWebhook.Checked = false;
+            this.btnAddWebhook.Location = new System.Drawing.Point(6, 90);
+            this.btnAddWebhook.Name = "btnAddWebhook";
+            this.btnAddWebhook.Size = new System.Drawing.Size(112, 23);
+            this.btnAddWebhook.TabIndex = 151;
+            this.btnAddWebhook.Text = "Add Webhook";
+            this.btnAddWebhook.Click += new System.EventHandler(this.btnAddWebhook_Click);
             // 
             // btnAddInfoMsg
             // 

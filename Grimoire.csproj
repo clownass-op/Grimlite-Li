@@ -1,4 +1,4 @@
-﻿<?xml version="1.0" encoding="utf-8"?>
+<?xml version="1.0" encoding="utf-8"?>
 <Project xmlns="http://schemas.microsoft.com/developer/msbuild/2003" DefaultTargets="Build" ToolsVersion="Current">
   <Import Project="packages\Costura.Fody.6.0.0\build\Costura.Fody.props" Condition="Exists('packages\Costura.Fody.6.0.0\build\Costura.Fody.props')" />
   <PropertyGroup>
@@ -271,6 +271,7 @@
     <Compile Include="Grimoire\Botting\Commands\Misc\CmdChange.cs" />
     <Compile Include="Grimoire\Botting\Commands\Misc\CmdClearTemp.cs" />
     <Compile Include="Grimoire\Botting\Commands\Misc\CmdClientMessage.cs" />
+    <Compile Include="Grimoire\Botting\Commands\Misc\CmdWebhook.cs" />
     <Compile Include="Grimoire\Botting\Commands\Misc\CmdDelay.cs" />
     <Compile Include="Grimoire\Botting\Commands\Misc\CmdStartAuras.cs" />
     <Compile Include="Grimoire\Botting\Commands\Misc\CmdStopAuras.cs" />
