@@ -3,6 +3,7 @@ using Grimoire.Botting.Commands.Map;
 using Grimoire.Game.Data;
 using Grimoire.Tools;
 using Newtonsoft.Json;
+using Newtonsoft.Json.Linq;
 using System;
 using System.Collections.Generic;
 using System.Linq;
@@ -420,7 +421,43 @@ namespace Grimoire.Game
         /// </summary>
         /// <param name="isSelf">False = enemy | True = self aura</param>
         /// <param name="auraName"></param>
-        public static int GetAuras(bool isSelf, string auraName) => Flash.Call<int>("GetAurasValue", isSelf.ToString(), auraName);
+        public static int GetAuras(bool isSelf, string auraName)
+        {
+            try
+            {
+                string baseState = isSelf ? "world.myAvatar" : "world.myAvatar.target";
+                
+                string lengthStr = Flash.GetGameObject(baseState + ".dataLeaf.auras.length");
+                UI.LogForm.Instance.AppendDebug($"[AuraDebug] GetAuras '{auraName}' via dataLeaf. Length: '{lengthStr}'");
+
+                if (!string.IsNullOrEmpty(lengthStr) && int.TryParse(lengthStr, out int length))
+                {
+                    for (int i = 0; i < length; i++)
+                    {
+                        string name = Flash.GetGameObject($"{baseState}.dataLeaf.auras.{i}.nam")?.Trim('"');
+                        string qtyStr = Flash.GetGameObject($"{baseState}.dataLeaf.auras.{i}.qty")?.Trim('"');
+                        string valStr = Flash.GetGameObject($"{baseState}.dataLeaf.auras.{i}.val")?.Trim('"');
+                        UI.LogForm.Instance.AppendDebug($"[AuraDebug] [{i}] nam='{name}' qty='{qtyStr}' val='{valStr}'");
+
+                        if (string.Equals(name, auraName, StringComparison.OrdinalIgnoreCase))
+                        {
+                            if (int.TryParse(qtyStr, out int qty)) return qty;
+                            if (int.TryParse(valStr, out int val)) return val;
+                            return 1;
+                        }
+                    }
+                    return 0;
+                }
+            }
+            catch (Exception ex)
+            {
+                UI.LogForm.Instance.AppendDebug($"[AuraDebug Error] {ex.Message}");
+            }
+
+            int fallbackVal = Flash.Call<int>("GetAurasValue", isSelf.ToString(), auraName);
+            UI.LogForm.Instance.AppendDebug($"[AuraDebug] Fallback GetAurasValue: {fallbackVal}");
+            return fallbackVal;
+        }
         public static bool AuraDuration(bool isSelf, string auraName, int target)
         {
             string result = Flash.Call<string>("AuraDuration", isSelf.ToString(), auraName);

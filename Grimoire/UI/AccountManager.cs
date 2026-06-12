@@ -18,6 +18,7 @@ using System.Drawing;
 using DarkUI.Forms;
 using DarkUI.Controls;
 using Grimoire.Networking;
+using System.Runtime.InteropServices;
 
 namespace Grimoire.UI
 {
@@ -753,27 +754,27 @@ namespace Grimoire.UI
     scriptInputPanel.Controls.Add(btnBrowseScript);
 
     // TreeView for script files
-    treeScripts = new TreeView
-    {
-        Dock = DockStyle.Fill,
-        BackColor = System.Drawing.Color.FromArgb(46, 46, 56),
-        ForeColor = System.Drawing.Color.Gainsboro,
-        LineColor = System.Drawing.Color.DarkGray,
-        BorderStyle = BorderStyle.None,
-        Font = new System.Drawing.Font("Segoe UI", 9f)
-    };
-    treeScripts.AfterSelect += TreeScripts_AfterSelect;
-    treeScripts.AfterExpand += TreeScripts_AfterExpand;
+            treeScripts = new TreeView
+            {
+                Dock = DockStyle.None, // We'll set this in BindCustomScrollBar
+                BackColor = System.Drawing.Color.FromArgb(46, 46, 56),
+                ForeColor = System.Drawing.Color.Gainsboro,
+                LineColor = System.Drawing.Color.DarkGray,
+                BorderStyle = BorderStyle.None,
+                Font = new System.Drawing.Font("Segoe UI", 9f)
+            };
+            treeScripts.AfterSelect += TreeScripts_AfterSelect;
+            treeScripts.AfterExpand += TreeScripts_AfterExpand;
 
-    var treePanel = new DarkPanel
-    {
-        Dock = DockStyle.Fill,
-        BackColor = bgDark,
-        Padding = new Padding(0, 8, 0, 0)
-    };
-    treePanel.Controls.Add(treeScripts);
+            var treePanel = new DarkPanel
+            {
+                Dock = DockStyle.Fill,
+                BackColor = bgDark,
+                Padding = new Padding(0, 8, 0, 0)
+            };
+            treePanel.Controls.Add(treeScripts);
 
-    scriptPanel.Controls.Add(treePanel);
+            scriptPanel.Controls.Add(treePanel);
 
     cbStartWithScript = new TransparentDarkRadioButton
     {
@@ -903,6 +904,7 @@ namespace Grimoire.UI
 
     BindCustomScrollBar(flowAccounts, flowAccountsContainer);
     BindCustomScrollBar(flowServers, serversListContainer);
+    BindCustomScrollBar(treeScripts, treePanel);
 
     mainSplit.Panel1.Controls.Add(leftPanel);
     mainSplit.Panel2.Controls.Add(rightPanel);
@@ -2440,6 +2442,15 @@ namespace Grimoire.UI
             {
                 AddScriptTreeNodes(treeScripts, _scriptBaseDir);
             }
+            // Trigger sync() by invoking on UI thread after layout
+            if (treeScripts.IsHandleCreated)
+            {
+                treeScripts.BeginInvoke(new Action(() =>
+                {
+                    // This will trigger Layout event which calls sync()
+                    treeScripts.PerformLayout();
+                }));
+            }
         }
 
         private void LoadScriptDirectory()
@@ -2663,7 +2674,10 @@ namespace Grimoire.UI
             return null;
         }
 
-        private void BindCustomScrollBar(FlowLayoutPanel panel, DarkPanel container)
+        private const int SB_VERT = 1;
+        private const int WM_VSCROLL = 0x0115;
+
+        private void BindCustomScrollBar(Control scrollableControl, DarkPanel container)
         {
             var scrollBar = new DarkScrollBar
             {
@@ -2672,23 +2686,25 @@ namespace Grimoire.UI
                 Minimum = 0,
                 Maximum = 100,
                 Value = 0,
-                Visible = false
+                Visible = false // Start hidden
             };
 
             container.Controls.Add(scrollBar);
             scrollBar.BringToFront();
 
-            panel.Dock = DockStyle.None;
-            panel.Left = 0;
-            panel.Top = 0;
+            scrollableControl.Dock = DockStyle.None;
+            scrollableControl.Left = 0;
+            scrollableControl.Top = 0;
 
             Action updateLayout = () =>
             {
-                if (panel.IsDisposed || container.IsDisposed) return;
+                if (scrollableControl.IsDisposed || container.IsDisposed) return;
                 
-                panel.Height = container.Height;
-                panel.Width = container.Width + SystemInformation.VerticalScrollBarWidth;
-
+                // Use same approach for both FlowLayoutPanel and TreeView:
+                // Make control wider to clip native scrollbar, position custom scrollbar on right
+                scrollableControl.Height = container.Height;
+                scrollableControl.Width = container.Width + SystemInformation.VerticalScrollBarWidth;
+                
                 if (scrollBar.Visible)
                 {
                     scrollBar.Left = container.Width - scrollBar.Width;
@@ -2702,48 +2718,221 @@ namespace Grimoire.UI
 
             scrollBar.ValueChanged += (s, e) =>
             {
-                if (!panel.IsDisposed)
+                if (scrollableControl.IsDisposed) return;
+                
+                if (scrollableControl is FlowLayoutPanel flp)
                 {
-                    panel.AutoScrollPosition = new Point(0, e.Value);
+                    flp.AutoScrollPosition = new Point(0, e.Value);
+                }
+                else if (scrollableControl is TreeView tv)
+                {
+                    // Send scroll message to TreeView
+                    SendMessage(tv.Handle, WM_VSCROLL, new IntPtr((e.Value << 16) | SB_THUMBPOSITION), IntPtr.Zero);
                 }
             };
 
             Action sync = () =>
             {
-                if (panel.IsDisposed || scrollBar.IsDisposed) return;
+                if (scrollableControl.IsDisposed || scrollBar.IsDisposed) return;
 
-                scrollBar.Minimum = panel.VerticalScroll.Minimum;
-                scrollBar.Maximum = panel.VerticalScroll.Maximum;
-                scrollBar.ViewSize = panel.ClientSize.Height;
-                
-                int maxVal = scrollBar.Maximum - scrollBar.ViewSize;
-                int targetVal = panel.VerticalScroll.Value;
-                if (targetVal < scrollBar.Minimum) targetVal = scrollBar.Minimum;
-                if (targetVal > maxVal) targetVal = maxVal;
-                scrollBar.Value = targetVal;
-
-                bool shouldBeVisible = panel.VerticalScroll.Maximum > panel.ClientSize.Height;
-                if (scrollBar.Visible != shouldBeVisible)
+                if (scrollableControl is FlowLayoutPanel flp)
                 {
-                    scrollBar.Visible = shouldBeVisible;
-                    updateLayout();
+                    scrollBar.Minimum = flp.VerticalScroll.Minimum;
+                    scrollBar.Maximum = flp.VerticalScroll.Maximum;
+                    scrollBar.ViewSize = flp.ClientSize.Height;
+                    
+                    int maxVal = scrollBar.Maximum - scrollBar.ViewSize;
+                    int targetVal = flp.VerticalScroll.Value;
+                    if (targetVal < scrollBar.Minimum) targetVal = scrollBar.Minimum;
+                    if (targetVal > maxVal) targetVal = maxVal;
+                    if (scrollBar.Value != targetVal)
+                        scrollBar.Value = targetVal;
+
+                    bool shouldBeVisible = flp.VerticalScroll.Maximum > flp.ClientSize.Height;
+                    if (scrollBar.Visible != shouldBeVisible)
+                    {
+                        scrollBar.Visible = shouldBeVisible;
+                        updateLayout();
+                    }
+                    else if (scrollBar.Visible)
+                    {
+                        scrollBar.BringToFront();
+                    }
                 }
-                else if (scrollBar.Visible)
+                else if (scrollableControl is TreeView tv)
                 {
-                    scrollBar.BringToFront();
+                    var scrollInfo = GetScrollInfo(tv);
+
+                    bool shouldBeVisible = scrollInfo.nPage > 0 && 
+                                           scrollInfo.nMax > 0 && 
+                                           (uint)scrollInfo.nPage < (uint)scrollInfo.nMax;
+
+                    if (scrollBar.Visible != shouldBeVisible)
+                    {
+                        scrollBar.Visible = shouldBeVisible;
+                        updateLayout();
+                    }
+                    else if (scrollBar.Visible)
+                    {
+                        scrollBar.BringToFront();
+                    }
+
+                    if (shouldBeVisible)
+                    {
+                        scrollBar.Minimum = scrollInfo.nMin;
+                        scrollBar.Maximum = scrollInfo.nMax;
+                        scrollBar.ViewSize = (int)scrollInfo.nPage;
+                        
+                        int maxVal = scrollBar.Maximum - scrollBar.ViewSize;
+                        int targetVal = Math.Max(scrollInfo.nMin, Math.Min(scrollInfo.nPos, maxVal));
+                        if (scrollBar.Value != targetVal)
+                            scrollBar.Value = targetVal;
+                    }
                 }
             };
 
-            panel.Scroll += (s, e) => sync();
-            panel.MouseWheel += (s, e) => sync();
-            panel.SizeChanged += (s, e) => sync();
-            panel.ControlAdded += (s, e) => sync();
-            panel.ControlRemoved += (s, e) => sync();
-            panel.Layout += (s, e) => sync();
+            if (scrollableControl is FlowLayoutPanel flp2)
+            {
+                flp2.Scroll += (s, e) => sync();
+                flp2.MouseWheel += (s, e) => sync();
+                flp2.SizeChanged += (s, e) => sync();
+                flp2.ControlAdded += (s, e) => sync();
+                flp2.ControlRemoved += (s, e) => sync();
+                flp2.Layout += (s, e) => sync();
+            }
+            else if (scrollableControl is TreeView tv2)
+            {
+                tv2.MouseWheel += (s, e) => sync();
+                container.MouseWheel += (s, e) => { tv2.Focus(); sync(); };
+                tv2.SizeChanged += (s, e) => sync();
+                tv2.AfterExpand += (s, e) => sync();
+                tv2.AfterCollapse += (s, e) => sync();
+                tv2.NodeMouseClick += (s, e) => sync();
+                tv2.Layout += (s, e) => sync();
+                tv2.HandleCreated += (s, e) =>
+                {
+                    // Delay sync() until TreeView is fully created and laid out
+                    if (tv2.IsHandleCreated)
+                    {
+                        tv2.BeginInvoke(new Action(() =>
+                        {
+                            updateLayout();
+                            sync();
+                        }));
+                    }
+                };
+                var nativeTreeView = new ScrollableTreeView(tv2);
+                nativeTreeView.Scrolled += () => sync();
+            }
             container.Layout += (s, e) => sync();
 
-            updateLayout();
-            sync();
+            // Delay initial updateLayout() and sync() for TreeView until container is laid out
+            if (scrollableControl is TreeView)
+            {
+                if (container.IsHandleCreated)
+                {
+                    container.BeginInvoke(new Action(() =>
+                    {
+                        updateLayout();
+                        sync();
+                    }));
+                }
+                else
+                {
+                    container.HandleCreated += (s, e) =>
+                    {
+                        container.BeginInvoke(new Action(() =>
+                        {
+                            updateLayout();
+                            sync();
+                        }));
+                    };
+                }
+            }
+            else
+            {
+                updateLayout();
+                sync();
+            }
+        }
+
+        // Helper class to catch TreeView scroll messages
+        private class ScrollableTreeView : NativeWindow
+        {
+            public event Action Scrolled;
+            private Control _control;
+            
+            private const int WM_VSCROLL    = 0x0115;
+            private const int WM_MOUSEWHEEL = 0x020A;
+            private const int WM_KEYDOWN    = 0x0100;
+            private const int WM_KEYUP      = 0x0101;
+            private const int WM_PAINT      = 0x000F;
+
+            public ScrollableTreeView(Control control)
+            {
+                _control = control;
+                AssignHandle(control.Handle);
+            }
+
+            protected override void WndProc(ref System.Windows.Forms.Message m)
+            {
+                base.WndProc(ref m);
+                
+                if (m.Msg == WM_VSCROLL    || m.Msg == WM_MOUSEWHEEL || 
+                    m.Msg == WM_KEYDOWN    || m.Msg == WM_KEYUP      || 
+                    m.Msg == WM_PAINT)
+                {
+                    Scrolled?.Invoke();
+                }
+            }
+        }
+
+        // P/Invoke declarations for TreeView scrollbar
+        [DllImport("user32.dll")]
+        private static extern int GetScrollPos(IntPtr hWnd, int nBar);
+
+        [DllImport("user32.dll")]
+        private static extern int SetScrollPos(IntPtr hWnd, int nBar, int nPos, bool bRedraw);
+
+        [DllImport("user32.dll")]
+        private static extern bool GetScrollInfo(IntPtr hWnd, int nBar, ref SCROLLINFO scrollInfo);
+
+        [DllImport("user32.dll")]
+        private static extern bool ShowScrollBar(IntPtr hWnd, int wBar, bool bShow);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+        private const int SIF_RANGE = 0x0001;
+        private const int SIF_PAGE = 0x0002;
+        private const int SIF_POS = 0x0004;
+        private const int SIF_ALL = SIF_RANGE | SIF_PAGE | SIF_POS;
+        private const int SB_THUMBPOSITION = 4;
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct SCROLLINFO
+        {
+            public int cbSize;
+            public int fMask;
+            public int nMin;
+            public int nMax;
+            public int nPage;
+            public int nPos;
+            public int nTrackPos;
+        }
+
+        private SCROLLINFO GetScrollInfo(TreeView tv)
+        {
+            var info = new SCROLLINFO();
+            info.cbSize = Marshal.SizeOf(info);
+            info.fMask = SIF_ALL;
+            GetScrollInfo(tv.Handle, SB_VERT, ref info);
+            return info;
+        }
+
+        private void SetScrollPos(TreeView tv, int pos)
+        {
+            SetScrollPos(tv.Handle, SB_VERT, pos, true);
         }
     }
 
