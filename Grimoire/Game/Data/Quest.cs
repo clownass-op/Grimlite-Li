@@ -144,8 +144,29 @@ namespace Grimoire.Game.Data
         [JsonProperty("iSlot")]
         public int? ISlot
         {
-            get => (_iSlot == null || _iSlot == -1) ? 0 : _iSlot;
+            get => _iSlot;
             set => _iSlot = value;
+        }
+
+        /// <summary>
+        /// Checks if the quest has been completed using the quest slot value.
+        /// For one-time quests (Slot < 0), returns true if the quest cannot be accepted.
+        /// For repeatable quests, returns true if quest value >= required value.
+        /// </summary>
+        public bool HasBeenCompleted()
+        {
+            int slot = _iSlot ?? 0;
+            
+            // For one-time quests, Slot is typically -1 or less
+            // If slot is negative, use IsAvailable to check if quest can still be accepted
+            if (slot < 0)
+            {
+                return !Flash.Call<bool>("IsAvailable", Id.ToString());
+            }
+            
+            // For repeatable quests, check if the quest value has reached the required value
+            int currentValue = int.Parse(Flash.CallGameFunction2("world.getQuestValue", slot));
+            return currentValue >= IValue;
         }
 
         [JsonProperty("iValue")]

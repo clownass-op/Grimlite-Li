@@ -53,11 +53,37 @@ namespace Grimoire.Botting.Commands.Combat
 			if (int.TryParse(QuestId, out id))
 			{
 				// Wait for quests to load from server
-			await instance.WaitUntil(() => Player.Quests != null, timeout: 10);
+				await instance.WaitUntil(() => Player.Quests != null, timeout: 10);
 
-			// Try to accept the quest if not already in progress
-			if (!Player.Quests.IsInProgress(id))
-			{
+				// 1. Check if quest can already be completed (fastest exit)
+				if (Player.Quests.CanComplete(id))
+				{
+					LogForm.Instance.AppendDebug($"[CmdKillFor] Quest {id} is ready to complete, completing now...");
+					Player.Quests.Complete(id);
+					await Task.Delay(1000);
+					return;
+				}
+
+				// 2. Load the quest to check if it's a one-time quest
+				if (!Player.Quests.QuestTree.Exists(q => q.Id == id))
+				{
+					Player.Quests.Load(id);
+					await instance.WaitUntil(() => Player.Quests.QuestTree.Any(q => q.Id == id), timeout: 3);
+				}
+
+				var quest = Player.Quests.Quest(id);
+				
+				// 3. Check if quest has been completed (for one-time quests)
+				// Use HasBeenCompleted which properly checks quest slot values
+				if (quest != null && quest.HasBeenCompleted())
+				{
+					LogForm.Instance.AppendDebug($"[CmdKillFor] Quest {id} has already been completed, skipping...");
+					return;
+				}
+
+				// Try to accept the quest if not already in progress
+				if (!Player.Quests.IsInProgress(id))
+				{
 				LogForm.Instance.AppendDebug($"[CmdKillFor] Attempting to accept quest {id}...");
 				
 				// Retry acceptance multiple times

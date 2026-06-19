@@ -1,4 +1,4 @@
-﻿using Grimoire.Botting.Commands.Map;
+using Grimoire.Botting.Commands.Map;
 using Grimoire.Game.Data;
 using Grimoire.Game;
 using Grimoire.Tools;
@@ -33,19 +33,33 @@ namespace Grimoire.Botting.Commands.Combat
             bool doQuest = QID != 0;
             if (doQuest)
             {
+                // 1. If quest is already ready to turn in, complete it and return
+                if (Player.Quests.CanComplete(QID))
+                {
+                    LogForm.Instance.devDebug($"Quest {QID} is ready to complete, completing now...");
+                    Player.Quests.Complete(QID);
+                    await Task.Delay(1000);
+                    return;
+                }
+
                 if (!Player.Quests.QuestTree.Exists(q => q.Id == QID))
                 {
                     Player.Quests.Load(QID);
-                    await instance.WaitUntil(() => Player.Quests.QuestTree.Any((Game.Data.Quest q) => q.Id == QID));
+                    await instance.WaitUntil(() => Player.Quests.QuestTree.Any((Game.Data.Quest q) => q.Id == QID), timeout: 3);
                 }
 
                 Game.Data.Quest quest = Player.Quests.Quest(QID);
-                int progress = Player.Quests.progress(quest.Id);
-                //int.Parse(Flash.CallGameFunction2("world.getQuestValue", quest.ISlot));
-                
-                //Checks if the quest require questchains
-                if (progress >= quest.IValue && quest.ISlot > 0) 
+
+                // 2. Check if quest has been completed (for one-time quests)
+                // Use HasBeenCompleted which properly checks quest slot values
+                if (quest != null && quest.HasBeenCompleted())
+                {
+                    LogForm.Instance.devDebug($"Quest {QID} has already been completed, skipping...");
                     return;
+                }
+
+                int progress = Player.Quests.progress(QID);
+
                 if (!quest.IsInProgress)
                 {
                     quest.Accept();
@@ -58,6 +72,12 @@ namespace Grimoire.Botting.Commands.Combat
                     Array.Resize(ref monsters, reqs.Count);
                 for (int i = 0; i < reqs.Count && instance.IsRunning; i++)
                 {
+                    if (quest.CanComplete)
+                    {
+                        quest.Complete();
+                        break;
+                    }
+
                     string name = reqs[i].Name;
                     string qty = reqs[i].Quantity.ToString();
 
@@ -69,13 +89,15 @@ namespace Grimoire.Botting.Commands.Combat
                         await joinmap(Map, instance);
 
                     if (int.TryParse(items[i], out int mapitemid))
-                        await getMap(mapitemid, qty);
+                        await getMap(mapitemid, qty, quest);
                     else
-                        await hunt(name, qty, monsters[i] ?? "*", instance);
+                        await hunt(name, qty, monsters[i] ?? "*", instance, quest);
+
+                    if (!quest.IsInProgress) break;
                 }
                 if (quest.CanComplete)
                     quest.Complete();
-                await Task.Delay(600);
+                await Task.Delay(1000);
                 return;
             }
             for (int i = 0; i < items.Length && instance.IsRunning; i++)
@@ -97,7 +119,7 @@ namespace Grimoire.Botting.Commands.Combat
                 await Task.Delay(600);
             }
         }
-        async Task hunt(string item, string qty, string monster, IBotEngine instance)
+        async Task hunt(string item, string qty, string monster, IBotEngine instance, Game.Data.Quest quest = null)
         {
             List<string> targetCell = GetMonsterCells(monster);
             int _maxcell;
@@ -114,6 +136,12 @@ namespace Grimoire.Botting.Commands.Combat
                 int i = 0;
                 while (!itemCollected(item, qty) && instance.IsRunning)
                 {
+                    if (quest != null && quest.CanComplete)
+                    {
+                        quest.Complete();
+                        return;
+                    }
+
                     if (World.IsMonsterAvailable(monster))
                     {
                         Player.AttackMonster(monster);
@@ -132,13 +160,19 @@ namespace Grimoire.Botting.Commands.Combat
             }
         }
 
-        async Task getMap(int mapitemid, string sqty)
+        async Task getMap(int mapitemid, string sqty, Game.Data.Quest quest = null)
         {
             Player.MoveToCell("Cut1", "Left");
             int qty = int.Parse(sqty);
 
             for (int i = -1; i < qty; i++) //extra 1 attempt for getting map anticipating failure
             {
+                if (quest != null && quest.CanComplete)
+                {
+                    quest.Complete();
+                    return;
+                }
+
                 await Proxy.Instance.SendToServer($"%xt%zm%getMapItem%1%{mapitemid}%");
                 await Task.Delay(600);
 

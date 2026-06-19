@@ -31,6 +31,8 @@ namespace Grimoire.Tools
     {
         private static Flash _instance;
         public static Flash Instance => _instance ?? (_instance = new Flash());
+        private static readonly object _serverCacheLock = new object();
+        private static readonly Dictionary<string, Server> _serverEndpointCache = new Dictionary<string, Server>(StringComparer.OrdinalIgnoreCase);
 
         public static AxShockwaveFlash flash;
 
@@ -296,6 +298,7 @@ namespace Grimoire.Tools
                     IsMemberOnly = server.GetValue("bUpg")?.ToString() == "1",
                     IsOnline = server.GetValue("bOnline")?.ToString() == "1",
                     Name = server.GetValue("sName")?.ToString(),
+                    Ip = server.GetValue("sIP")?.ToString(),
                     Port = int.Parse(server.GetValue("iPort")?.ToString())
                 };
                 server["RealAddress"] = server["sIP"];
@@ -303,6 +306,7 @@ namespace Grimoire.Tools
                 server["sIP"] = "127.0.0.1";
                 server["iPort"] = Proxy.Instance.ListenerPort;
             }
+            CacheServers(array);
             BotManager.Instance.OnServersLoaded(array);
             return packet.ToString(Newtonsoft.Json.Formatting.None);
         }
@@ -337,11 +341,48 @@ namespace Grimoire.Tools
                     IsMemberOnly = xmlElement2.Attributes["bUpg"].Value == "1",
                     IsOnline = xmlElement2.Attributes["bOnline"].Value == "1",
                     Name = xmlElement2.Attributes["sName"].Value,
-                    Port = int.Parse(xmlElement2.Attributes["iPort"].Value)
+                    Ip = xmlAttribute.Value,
+                    Port = int.Parse(xmlAttribute2.Value)
                 };
             }
+            CacheServers(array);
             BotManager.Instance.OnServersLoaded(array);
             return xmlDocument.OuterXml;
+        }
+
+        private static void CacheServers(IEnumerable<Server> servers)
+        {
+            if (servers == null)
+                return;
+
+            lock (_serverCacheLock)
+            {
+                _serverEndpointCache.Clear();
+                foreach (Server server in servers)
+                {
+                    if (server == null || string.IsNullOrWhiteSpace(server.Ip) || server.Port <= 0)
+                        continue;
+
+                    _serverEndpointCache[BuildServerEndpointKey(server.Ip, server.Port)] = server;
+                }
+            }
+        }
+
+        private static string BuildServerEndpointKey(string address, int port)
+        {
+            return $"{address?.Trim().ToLowerInvariant()}:{port}";
+        }
+
+        public static Server ResolveServerByEndpoint(string address, int port)
+        {
+            if (string.IsNullOrWhiteSpace(address) || port <= 0)
+                return null;
+
+            lock (_serverCacheLock)
+            {
+                _serverEndpointCache.TryGetValue(BuildServerEndpointKey(address, port), out Server server);
+                return server;
+            }
         }
 
         public static object FromFlashXml(XElement el)
@@ -467,6 +508,14 @@ namespace Grimoire.Tools
             switch (packet.Split('%')[3])
             {
                 case "moveToCell":
+                    string[] moveToCellParts = packet.Split('%');
+                    if (moveToCellParts.Length > 6)
+                    {
+                        string cell = moveToCellParts[5];
+                        string pad = moveToCellParts[6];
+                        if (!string.IsNullOrWhiteSpace(cell) && !string.IsNullOrWhiteSpace(pad))
+                            AccountPresenceTracker.Instance.UpdateCellPad(cell, pad);
+                    }
                     if (OptionsManager.WalkSpeed != 8)
                         OptionsManager.SetWalkSpeed();
                     break;
@@ -481,7 +530,7 @@ namespace Grimoire.Tools
                 case "resPlayerTimed":
 					Flash.Call("ResetAura", new string[0]);
 					break;
-					
+
                 case "getMapItem":
                     int itemId = int.Parse(packet.Split('%')[5]);
                     if (Player.recentMapItem.TryGetValue(itemId, out var itemName) && itemName?.Equals("blank") == false)
@@ -506,6 +555,8 @@ namespace Grimoire.Tools
                     break;
 
                 case "firstJoin":
+                    AccountPresenceTracker.Instance.StartTrackingCurrentSession();
+                    AccountPresenceTracker.Instance.RefreshNow();
                     if (BotManager.Instance.chkEnableSettings.Checked)
                     {
                         Task.Run(async () =>
@@ -517,6 +568,12 @@ namespace Grimoire.Tools
                         );
                     }
                     break;
+
+                case "cmd":
+                    string[] cmdParts = packet.Split('%');
+                    if (cmdParts.Length > 5 && cmdParts[5] == "logout")
+                        AccountPresenceTracker.Instance.MarkCurrentSessionOffline();
+                    break;
             }
             //Console.WriteLine($"client: {packet}");
             return packet;
@@ -525,6 +582,7 @@ namespace Grimoire.Tools
         private static string ProcessPacketFromServer(string packet)
         {
             //Console.WriteLine($"server: {packet}");
+            MapItemDiscovery.ProcessServerPacket(packet);
             //case "aura+":
             dynamic ptext = JsonConvert.DeserializeObject<dynamic>(packet);
             JObject bigObject = (JObject)ptext["b"]["o"];
@@ -563,6 +621,7 @@ namespace Grimoire.Tools
                 Call("ChangeColorName", nameColor[0]);
             }
             //if (nameColor != "0") Call("ChangeColorName", nameColor[0]);
+            AccountPresenceTracker.Instance.StartTrackingCurrentSession();
         }
 
         public static string ProcessPext(string text)
@@ -624,6 +683,10 @@ namespace Grimoire.Tools
 							World.OnShopLoaded(shopinfo.ToObject<ShopInfo>());
 						}
 						break;*/
+
+                    case "moveToArea":
+                        World.MapFilePath = Convert.ToString(data.strMapFileName) ?? string.Empty;
+                        break;
 
                     case "sAct":
                         if (OptionsManager.InfiniteRange)

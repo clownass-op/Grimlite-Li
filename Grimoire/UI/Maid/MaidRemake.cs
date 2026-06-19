@@ -338,7 +338,9 @@ namespace Grimoire.UI.Maid
                 if (cbSpecialAnims.Checked)
                     Flash.FlashCall2 += AnimsMsgHandler;
 
-                if (!cbUnfollow.Checked && Player.IsLoggedIn && !World.IsMapLoading && isPlayerInMyRoom && !isPlayerInMyCell)
+                if (cbTrackJson.Checked)
+                    await followTrackedTarget();
+                else if (!cbUnfollow.Checked && Player.IsLoggedIn && !World.IsMapLoading && isPlayerInMyRoom && !isPlayerInMyCell)
                     Player.GoToPlayer(targetUsername);
 
                 if (cbAttackPriority.Checked)
@@ -560,7 +562,10 @@ namespace Grimoire.UI.Maid
                         }
                         else if (Player.IsLoggedIn && !World.IsMapLoading)
                         {
-                            gotoTarget(targetUsername);
+                            if (cbTrackJson.Checked)
+                                await followTrackedTarget();
+                            else
+                                gotoTarget(targetUsername);
                             if (cbStopIf.Checked)
                             {
                                 gotoTry++;
@@ -584,11 +589,11 @@ namespace Grimoire.UI.Maid
                                 await Task.Delay(250);
 
                             // goto target current cell when in the same room
-                            while (cbEnablePlugin.Checked && Player.IsLoggedIn && isPlayerInMyRoom && !isPlayerInMyCell)
+                            while (!cbTrackJson.Checked && cbEnablePlugin.Checked && Player.IsLoggedIn && isPlayerInMyRoom && !isPlayerInMyCell)
                             {
                                 Player.GoToPlayer(targetUsername);
                                 debug("Attempt to chase");
-                                if (cbEnablePlugin.Checked && Player.IsLoggedIn && isPlayerInMyRoom && !isPlayerInMyCell)
+                                if (!cbTrackJson.Checked && cbEnablePlugin.Checked && Player.IsLoggedIn && isPlayerInMyRoom && !isPlayerInMyCell)
                                     await Task.Delay(1000);
                                 else break;
                             }
@@ -1562,11 +1567,78 @@ namespace Grimoire.UI.Maid
 
         private async void gotoTarget(string targetUsername)
         {
+            if (cbTrackJson.Checked)
+            {
+                await followTrackedTarget();
+                return;
+            }
+
             if (Player.CurrentState != Player.State.Idle)
                 Player.MoveToCell("Enter", "Spawn");
             await Task.Delay(500);
             Player.GoToPlayer(targetUsername);
             //await Proxy.Instance.SendToServer($"%xt%zm%cmd%1%goto%{targetUsername}%");
+        }
+
+        private AccountPresenceData getTrackedTargetSnapshot()
+        {
+            string username = targetUsername;
+            if (string.IsNullOrWhiteSpace(username))
+                return null;
+
+            return AccountPresenceTracker.Instance
+                .GetTrackedAccounts()
+                .Where(a => !string.IsNullOrWhiteSpace(a.Username) &&
+                            a.Username.Equals(username, StringComparison.OrdinalIgnoreCase))
+                .OrderByDescending(a => a.IsOnline)
+                .ThenByDescending(a => a.LastUpdatedUtc)
+                .FirstOrDefault();
+        }
+
+        private bool isTrackedTargetInMyRoom(AccountPresenceData snapshot)
+        {
+            if (snapshot == null || string.IsNullOrWhiteSpace(snapshot.MapName))
+                return false;
+
+            if (!Player.Map.Equals(snapshot.MapName, StringComparison.OrdinalIgnoreCase))
+                return false;
+
+            return !snapshot.RoomNumber.HasValue || World.RoomNumber == snapshot.RoomNumber.Value;
+        }
+
+        private async Task followTrackedTarget()
+        {
+            AccountPresenceData snapshot = getTrackedTargetSnapshot();
+            if (snapshot == null)
+            {
+                debug($"No tracked snapshot found for {targetUsername}");
+                return;
+            }
+
+            string trackedMap = !string.IsNullOrWhiteSpace(snapshot.Map) ? snapshot.Map : snapshot.MapName;
+            string trackedCell = string.IsNullOrWhiteSpace(snapshot.Cell) ? "Enter" : snapshot.Cell;
+            string trackedPad = string.IsNullOrWhiteSpace(snapshot.Pad) ? "Spawn" : snapshot.Pad;
+
+            if (string.IsNullOrWhiteSpace(trackedMap))
+            {
+                debug($"Tracked snapshot for {targetUsername} has no map");
+                return;
+            }
+
+            if (!isTrackedTargetInMyRoom(snapshot))
+            {
+                debug($"Track JSON join -> {trackedMap} {trackedCell} {trackedPad}");
+                Player.JoinMap(trackedMap, trackedCell, trackedPad);
+                await Task.Delay(500);
+                return;
+            }
+
+            if (!Player.Cell.Equals(trackedCell, StringComparison.OrdinalIgnoreCase) ||
+                !Player.Pad.Equals(trackedPad, StringComparison.OrdinalIgnoreCase))
+            {
+                debug($"Track JSON cell -> {trackedCell} {trackedPad}");
+                Player.MoveToCell(trackedCell, trackedPad);
+            }
         }
 
         /* UI state */

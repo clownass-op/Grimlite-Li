@@ -22,6 +22,16 @@ namespace Grimoire.Game
 
         public static DropStack DropStack;
 
+        /// <summary>
+        /// Server-side path to the current map SWF (e.g. "Battleon.swf").
+        /// </summary>
+        public static string MapFilePath { get; set; } = string.Empty;
+
+        public static string MapFileName =>
+            string.IsNullOrEmpty(MapFilePath)
+                ? string.Empty
+                : MapFilePath.Split(new[] { '/', '\\' }, StringSplitOptions.RemoveEmptyEntries).Last();
+
         private static readonly Dictionary<LockActions, string> LockedActions;
 
         public static List<Monster> VisibleMonsters => Flash.Call<List<Monster>>("GetVisibleMonstersInCell", new string[0]);

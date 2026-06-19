@@ -40,13 +40,13 @@ if (-not (Test-Path $slnPath)) {
 $msbuild = Find-MSBuild
 if ($msbuild) {
     Write-Host "Using MSBuild: $msbuild"
-    & "$msbuild" "$slnPath" /t:Rebuild /p:Configuration=$Configuration
+    & "$msbuild" "$slnPath" /t:Rebuild /p:Configuration=$Configuration /p:GenerateManifests=false
     exit $LASTEXITCODE
 }
 
 Write-Host "MSBuild not found on PATH or common locations. Falling back to 'dotnet build' (may not work for older .NET Framework projects)."
 if (Get-Command dotnet -ErrorAction SilentlyContinue) {
-    dotnet build "$slnPath" -c $Configuration
+    dotnet build "$slnPath" -c $Configuration /p:GenerateManifests=false
     exit $LASTEXITCODE
 }
 

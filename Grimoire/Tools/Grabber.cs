@@ -92,7 +92,7 @@ namespace Grimoire.Tools
                         {
                             TreeNode treeNode3 = treeNode2.Nodes.Add(req.Name);
                             treeNode3.ContextMenuStrip = MenuItem(req);
-                            treeNode3.Nodes.Add($"ID: {req.Id}");
+                            AddQuestRequirementIdNodes(treeNode3, req);
                             treeNode3.Nodes.Add($"Quantity: {req.Quantity}");
                             treeNode3.Nodes.Add("Temporary: " + (req.IsTemporary ? "Yes" : "No"));
                             treeNode3.Nodes.Add($"Description: {req.Description}");
@@ -123,6 +123,18 @@ namespace Grimoire.Tools
                     }
                 }
             }
+        }
+
+        private static void AddQuestRequirementIdNodes(TreeNode node, InventoryItem item)
+        {
+            if (Player.TryGetMapItemId(item, out int mapItemId))
+            {
+                node.Nodes.Add($"ID: {mapItemId}");
+                node.Nodes.Add($"Item ID: {item.Id}");
+                return;
+            }
+
+            node.Nodes.Add($"ID: {item.Id}");
         }
 
         public static void GrabShopItems(TreeView tree)
@@ -314,6 +326,88 @@ namespace Grimoire.Tools
             }
         }
 
+        public static void GrabMapItems(TreeView tree, List<MapItem> mapItems)
+        {
+            if (mapItems == null || mapItems.Count == 0)
+            {
+                MessageBox.Show(
+                    "No map items found for the current map.",
+                    "Get Map Item IDs",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Information);
+                return;
+            }
+
+            IEnumerable<MapItem> list = Loaders.order == OrderBy.Id
+                ? mapItems.OrderBy(item => item.Id)
+                : mapItems.OrderBy(item => item.QuestId);
+
+            foreach (MapItem item in list)
+            {
+                if (item.QuestId <= 0)
+                    continue;
+
+                string questName = "";
+                if (item.QuestId > 0)
+                {
+                    Quest q = Player.Quests.QuestTree?.FirstOrDefault(x => x.Id == item.QuestId);
+                    if (q != null && !string.IsNullOrEmpty(q.Name))
+                        questName = $" ({q.Name})";
+                }
+
+                TreeNode treeNode = tree.Nodes.Add($"{item.Id} - Quest {item.QuestId}{questName}");
+                treeNode.ContextMenuStrip = MenuMapItem(item);
+                treeNode.Nodes.Add($"Map Item ID: {item.Id}");
+                treeNode.Nodes.Add($"Quest ID: {item.QuestId}");
+                if (!string.IsNullOrEmpty(questName))
+                    treeNode.Nodes.Add($"Quest Name: {questName.Trim(' ', '(', ')')}");
+                if (!string.IsNullOrWhiteSpace(item.MapName))
+                    treeNode.Nodes.Add($"Map: {item.MapName}");
+            }
+        }
+
+        private static ContextMenuStrip MenuMapItem(MapItem item)
+        {
+            ContextMenuStrip contextMenuStrip = new ContextMenuStrip();
+
+            ToolStripMenuItem getMapItem = new ToolStripMenuItem { Text = "Get map item" };
+            getMapItem.Click += delegate
+            {
+                Player.GetMapItem(item.Id);
+            };
+
+            ToolStripMenuItem addCommand = new ToolStripMenuItem { Text = "Add to bot commands" };
+            addCommand.Click += delegate
+            {
+                BotManager.Instance.AddCommand(new Botting.Commands.Item.CmdMapItem { ItemId = item.Id });
+            };
+
+            ToolStripMenuItem loadQuest = new ToolStripMenuItem { Text = "Load quest" };
+            loadQuest.Click += delegate
+            {
+                Player.Quests.Load(item.QuestId);
+            };
+
+            ToolStripMenuItem acceptQuest = new ToolStripMenuItem { Text = "Accept quest" };
+            acceptQuest.Click += delegate
+            {
+                Player.Quests.Accept(item.QuestId);
+            };
+
+            ToolStripMenuItem copyId = new ToolStripMenuItem { Text = "Copy map item ID" };
+            copyId.Click += delegate
+            {
+                Clipboard.SetText(item.Id.ToString());
+            };
+
+            contextMenuStrip.Items.Add(getMapItem);
+            contextMenuStrip.Items.Add(addCommand);
+            contextMenuStrip.Items.Add(loadQuest);
+            contextMenuStrip.Items.Add(acceptQuest);
+            contextMenuStrip.Items.Add(copyId);
+            return contextMenuStrip;
+        }
+
         private static ContextMenuStrip Wiki(string item)
         {
             ContextMenuStrip contextMenuStrip = new ContextMenuStrip();
@@ -495,7 +589,7 @@ namespace Grimoire.Tools
                 };
                 toolStripMenuItem5.Click += delegate (object S, EventArgs E)
                 {
-                    string longString = 
+                    string longString =
                     $"\"ItemName\" : \"{string.Join(",", Items.Select(i => i.Name))}\",\n"+
                     $"\"Quantity\" : \"{string.Join(",", Items.Select(i => i.Quantity))}\"";
                     Clipboard.SetText(longString);

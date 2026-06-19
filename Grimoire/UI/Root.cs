@@ -1,4 +1,4 @@
-﻿using AxShockwaveFlashObjects;
+using AxShockwaveFlashObjects;
 using Grimoire.Game;
 using Grimoire.Networking;
 using Grimoire.Tools;

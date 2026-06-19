@@ -181,6 +181,7 @@
     <Compile Include="Grimoire\Botting\Commands\Quest\CmdRemoveQuestList.cs" />
     <Compile Include="Grimoire\Networking\Handlers\HandlerAntiMod.cs" />
     <Compile Include="Grimoire\Networking\Handlers\HandlerAutoZoneQueenIona.cs" />
+    <Compile Include="Grimoire\Networking\Handlers\HandlerAccountPresence.cs" />
     <Compile Include="Grimoire\Networking\Handlers\HandlerAutoZoneAstralEmpyrean.cs" />
     <Compile Include="Grimoire\Networking\Handlers\HandlerAutoZoneAstralEmpyreanP1.cs" />
     <Compile Include="Grimoire\Networking\Handlers\HandlerAutoZoneDarkCarnax.cs" />
@@ -197,6 +198,9 @@
     <Compile Include="Grimoire\Networking\Handlers\Maid\TargetHandler.cs" />
     <Compile Include="Grimoire\Networking\Handlers\Maid\WarningMsgHandler.cs" />
     <Compile Include="Grimoire\Tools\MapConfig.cs" />
+    <Compile Include="Grimoire\Game\Data\MapItem.cs" />
+    <Compile Include="Grimoire\Tools\MapItemFinder.cs" />
+    <Compile Include="Grimoire\Tools\MapItemDiscovery.cs" />
     <Compile Include="Grimoire\Tools\Maid\ClassPreset.cs" />
     <Compile Include="Grimoire\Tools\LowLevelKeyboardHook.cs" />
     <Compile Include="Grimoire\Tools\Maid\MaidConfig.cs" />
@@ -387,6 +391,7 @@
     <Compile Include="Grimoire\GameProxy\Interceptor.cs" />
     <Compile Include="Grimoire\GameProxy\MessageInfo.cs" />
     <Compile Include="Grimoire\Game\BotData.cs" />
+    <Compile Include="Grimoire\Game\Data\AccountPresenceData.cs" />
     <Compile Include="Grimoire\Game\Data\Bank.cs" />
     <Compile Include="Grimoire\Game\Data\BankItem.cs" />
     <Compile Include="Grimoire\Game\Data\CompletedQuest.cs" />
@@ -418,8 +423,10 @@
     <Compile Include="Grimoire\Networking\Handlers\HandlerAnimations.cs" />
     <Compile Include="Grimoire\Networking\Handlers\HandlerSpecialAnims.cs" />
     <Compile Include="Grimoire\Networking\Handlers\HandlerUltraGramielTaunt.cs" />
+    <Compile Include="Grimoire\Networking\Handlers\HandlerAddItemsMapItem.cs" />
     <Compile Include="Grimoire\Networking\Handlers\HandlerChat.cs" />
     <Compile Include="Grimoire\Networking\Handlers\HandlerDropItem.cs" />
+    <Compile Include="Grimoire\Networking\Handlers\HandlerGetMapItemRequest.cs" />
     <Compile Include="Grimoire\Networking\Handlers\HandlerGetQuests.cs" />
     <Compile Include="Grimoire\Networking\Handlers\HandlerLoadBank.cs" />
     <Compile Include="Grimoire\Networking\Handlers\HandlerLoadShop.cs" />
@@ -439,6 +446,7 @@
     <Compile Include="Grimoire\Networking\XmlMessage.cs" />
     <Compile Include="Grimoire\Networking\XtMessage.cs" />
     <Compile Include="Grimoire\Properties\Settings.cs" />
+    <Compile Include="Grimoire\Tools\AccountPresenceTracker.cs" />
     <Compile Include="Grimoire\Tools\AutoRelogin.cs" />
     <Compile Include="Grimoire\Tools\BoolConverter.cs" />
     <Compile Include="Grimoire\Tools\Buyback\AutoBuyBack.cs" />
@@ -771,8 +779,8 @@
     </PostBuildEvent>
   </PropertyGroup>
   <PropertyGroup>
-    <!-- Kill any running Grimoire.exe but do NOT fail the build if it's not found -->
-    <PreBuildEvent>taskkill /F /IM Grimoire.exe 2&gt;nul &amp; exit /b 0</PreBuildEvent>
+    <!-- Disabled: this pre-build kill step breaks under some MSBuild environments -->
+    <PreBuildEvent></PreBuildEvent>
   </PropertyGroup>
   <Import Project="packages\Fody.6.8.2\build\Fody.targets" Condition="Exists('packages\Fody.6.8.2\build\Fody.targets')" />
   <Target Name="EnsureNuGetPackageBuildImports" BeforeTargets="PrepareForBuild">

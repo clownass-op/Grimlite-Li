@@ -206,6 +206,13 @@ namespace Grimoire.Game.Data
             set;
         }
 
+        [JsonIgnore]
+        public int? MapItemId
+        {
+            get;
+            set;
+        }
+
         [JsonProperty("sName")]
         public string Name
         {

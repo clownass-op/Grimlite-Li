@@ -82,6 +82,7 @@ namespace Grimoire.Networking
 			if (this._listener == null) return;
 			if (appClosing)
 				AppClosingToken.Cancel();
+			AccountPresenceTracker.Instance.MarkCurrentSessionOffline();
 			this._listener.Stop();
 			GrimoireClient server = this._server;
 			if (server != null)
@@ -135,6 +136,9 @@ namespace Grimoire.Networking
 				{
 					int.TryParse(portStr, out port);
 				}
+				Server resolvedServer = Flash.ResolveServerByEndpoint(address, port);
+				if (resolvedServer != null)
+					this.DestinationServerOverride = resolvedServer;
 				this._server = new GrimoireClient(address, port);
 				this._client.Disconnected += this.OnClientDisconnect;
 				this._server.Disconnected += this.OnServerDisconnect;
@@ -151,6 +155,7 @@ namespace Grimoire.Networking
 
 		private void OnClientDisconnect()
 		{
+			AccountPresenceTracker.Instance.MarkCurrentSessionOffline();
 			GrimoireClient server = this._server;
 			if (server == null)
 			{
@@ -161,6 +166,7 @@ namespace Grimoire.Networking
 
 		private void OnServerDisconnect()
 		{
+			AccountPresenceTracker.Instance.MarkCurrentSessionOffline();
 			GrimoireClient client = this._client;
 			if (client == null)
 			{
@@ -219,21 +225,21 @@ namespace Grimoire.Networking
 						{
 							item.Handle(jsonMessage);
 						}
-						
+
 						// Check for dodge in "ct" (combat) packets
 						if (jsonMessage.Command == "ct")
 						{
 							try
 							{
 								dynamic packet = JsonConvert.DeserializeObject<dynamic>(jsonMessage.RawContent);
-								
+
 								// CT packets have the sara array nested at packet.b.o.sara
 								JToken saraToken = packet?["b"]?["o"]?["sara"];
-								
+
 								if (saraToken != null)
 								{
 									JArray sara = saraToken as JArray;
-									
+
 									if (sara != null && sara.Count > 0)
 									{
 										foreach (JToken actionToken in sara)
@@ -246,7 +252,7 @@ namespace Grimoire.Networking
 												{
 													string actionType = resultToken["typ"]?.ToString(); // typ not type
 													string targetInfo = resultToken["tInf"]?.ToString();
-													
+
 													// Check if player dodged - typ:"d" means dodge
 													if (!string.IsNullOrEmpty(actionType) && actionType == "d" && !string.IsNullOrEmpty(targetInfo) && targetInfo.StartsWith("p:"))
 													{
@@ -335,10 +341,12 @@ namespace Grimoire.Networking
 		private TcpListener _listener;
 
 		private readonly List<IJsonMessageHandler> _handlersJson = new List<IJsonMessageHandler>
-		{			
+		{
 			//new HandlerSkills(),
 			//new HandlerDPS(),
 			//new HandlerDropItem(),
+			new HandlerAccountPresenceMoveToArea(),
+			new HandlerAddItemsMapItem(),
 			new HandlerGetQuests(),
 			new HandlerQuestComplete(),
 			//new HandlerLoadBank(),
@@ -348,8 +356,13 @@ namespace Grimoire.Networking
 		private readonly List<IXtMessageHandler> _handlersXt = new List<IXtMessageHandler>
 		{
 			//new HandlerLogin(),
+			new HandlerAccountPresenceFirstJoin(),
+			new HandlerAccountPresenceMoveToCell(),
+			new HandlerAccountPresenceUotls(),
+			new HandlerAccountPresenceLogout(),
 			new HandlerAFK(),
 			new HandlerChat(),
+			new HandlerGetMapItemRequest(),
 			new HandlerXtJoin(),
 			//new HandlerXtCellJoin()
 			new HandlerWarnings()

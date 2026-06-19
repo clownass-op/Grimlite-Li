@@ -39,15 +39,15 @@ namespace Grimoire.Networking.Handlers
                     if (obj2 == null)
                         continue;
 
-                    string name = item.Value["sName"]?.ToString() ?? Player.TempInventory.Items.FirstOrDefault
-                        (i => i.Id == (int)item.Value["ItemID"])?.Name ?? "blank";
+                    var mapItem = obj2.ToObject<Game.Data.InventoryItem>();
+                    if (mapItem == null)
+                        continue;
 
-                    lock (Player.recentMapItem)
-                    {
-                        Player.recentMapItem[mapItemid] = name;
-                    }
+                    if (string.IsNullOrWhiteSpace(mapItem.Name))
+                        mapItem.Name = Player.TempInventory.Items.FirstOrDefault(i => i.Id == mapItem.Id)?.Name ?? "blank";
 
-                    LogForm.Instance.devDebug($"[AddItemHandler] MapItem added: {name} ({mapItemid})");
+                    Player.RegisterMapItem(mapItemid, mapItem);
+                    LogForm.Instance.devDebug($"[AddItemHandler] MapItem added: {mapItem.Name} ({mapItemid}) -> ItemID {mapItem.Id}");
                 }
                 _tcs.TrySetResult(true);
             }

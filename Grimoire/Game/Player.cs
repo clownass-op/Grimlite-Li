@@ -365,27 +365,27 @@ namespace Grimoire.Game
                 // Try to use skill 5 to test if it's responsive
                 // If it fails silently (locked), we'll switch classes to force re-equip
                 int skill5Status = SkillAvailable("5");
-                
+
                 // If skill 5 shows extreme cooldown (>120 seconds), it's likely stuck/locked
                 // This indicates it wasn't properly equipped
                 if (skill5Status > 120000)
                 {
                     string currentClass = EquippedClass;
-                    
+
                     // Get available classes from inventory to swap to temporarily
-                    InventoryItem tempClass = Inventory.Items.FirstOrDefault(i => 
+                    InventoryItem tempClass = Inventory.Items.FirstOrDefault(i =>
                         i.Category == "Class" && i.Name != currentClass && i.IsEquippable);
-                    
+
                     if (tempClass != null)
                     {
                         // Equip temporary class - forces game to re-equip all skills
                         Equip(tempClass.Id);
                         await Task.Delay(1000); // Wait for class switch animation
-                        
+
                         // Equip original class back
-                        InventoryItem originalClass = Inventory.Items.FirstOrDefault(i => 
+                        InventoryItem originalClass = Inventory.Items.FirstOrDefault(i =>
                             i.Category == "Class" && i.Name == currentClass && i.IsEquippable);
-                        
+
                         if (originalClass != null)
                         {
                             Equip(originalClass.Id);
@@ -403,6 +403,12 @@ namespace Grimoire.Game
         public static void GetMapItem(string id) => Flash.Call("GetMapItem", id);
 
         public static void GetMapItem(int id) => Flash.Call("GetMapItem", id.ToString());
+
+        public static void GetMapItem(int id, int quantity)
+        {
+            for (int i = 0; i < quantity; i++)
+                GetMapItem(id);
+        }
 
         public static void Logout() => Flash.Call("Logout", new string[0]);
 
@@ -426,7 +432,7 @@ namespace Grimoire.Game
             try
             {
                 string baseState = isSelf ? "world.myAvatar" : "world.myAvatar.target";
-                
+
                 string lengthStr = Flash.GetGameObject(baseState + ".dataLeaf.auras.length");
                 UI.LogForm.Instance.AppendDebug($"[AuraDebug] GetAuras '{auraName}' via dataLeaf. Length: '{lengthStr}'");
 
@@ -462,7 +468,7 @@ namespace Grimoire.Game
         {
             string result = Flash.Call<string>("AuraDuration", isSelf.ToString(), auraName);
             if (string.IsNullOrEmpty(result)) return false;
-            
+
             string[] aura = result.Split('/');
             if (aura.Length < 2) return false;
             int.TryParse(aura[1], out int runTime);
@@ -471,6 +477,93 @@ namespace Grimoire.Game
         }
 
         public static Dictionary<int, string> recentMapItem = new Dictionary<int, string>();
+
+        private static readonly Dictionary<int, int> _recentMapItemByItemId = new Dictionary<int, int>();
+        private static readonly Dictionary<string, int> _recentMapItemByName = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+        private static readonly Queue<int> _pendingMapItemRequests = new Queue<int>();
+
+        public static void RegisterMapItem(int mapItemId, InventoryItem item)
+        {
+            if (item == null)
+                return;
+
+            item.MapItemId = mapItemId;
+
+            lock (recentMapItem)
+            {
+                recentMapItem[mapItemId] = item.Name ?? "blank";
+
+                if (item.Id > 0)
+                    _recentMapItemByItemId[item.Id] = mapItemId;
+
+                if (!string.IsNullOrWhiteSpace(item.Name))
+                    _recentMapItemByName[item.Name] = mapItemId;
+            }
+        }
+
+        public static void QueueMapItemRequest(int mapItemId)
+        {
+            if (mapItemId <= 0)
+                return;
+
+            lock (recentMapItem)
+            {
+                _pendingMapItemRequests.Enqueue(mapItemId);
+                while (_pendingMapItemRequests.Count > 50)
+                    _pendingMapItemRequests.Dequeue();
+            }
+        }
+
+        public static bool TryDequeueMapItemRequest(out int mapItemId)
+        {
+            lock (recentMapItem)
+            {
+                if (_pendingMapItemRequests.Count > 0)
+                {
+                    mapItemId = _pendingMapItemRequests.Dequeue();
+                    return true;
+                }
+            }
+
+            mapItemId = 0;
+            return false;
+        }
+
+        public static bool TryGetMapItemId(InventoryItem item, out int mapItemId)
+        {
+            mapItemId = 0;
+            if (item == null)
+                return false;
+
+            if (item.MapItemId.HasValue)
+            {
+                mapItemId = item.MapItemId.Value;
+                return true;
+            }
+
+            return TryGetMapItemId(item.Id, out mapItemId) || TryGetMapItemId(item.Name, out mapItemId);
+        }
+
+        public static bool TryGetMapItemId(int itemId, out int mapItemId)
+        {
+            lock (recentMapItem)
+            {
+                return _recentMapItemByItemId.TryGetValue(itemId, out mapItemId);
+            }
+        }
+
+        public static bool TryGetMapItemId(string itemName, out int mapItemId)
+        {
+            mapItemId = 0;
+            if (string.IsNullOrWhiteSpace(itemName))
+                return false;
+
+            lock (recentMapItem)
+            {
+                return _recentMapItemByName.TryGetValue(itemName, out mapItemId);
+            }
+        }
+
         static Player()
         {
             Bank = new Bank();

@@ -1,6 +1,7 @@
 using Grimoire.Botting;
 using Grimoire.Game;
 using Grimoire.Game.Data;
+using Grimoire.Networking;
 using Grimoire.UI;
 using System;
 using System.Threading;
@@ -31,6 +32,7 @@ namespace Grimoire.Tools
 
         public static void Connect(Server server)
         {
+            Proxy.Instance.DestinationServerOverride = server;
             Flash.Call("Connect", server.Name);
         }
 

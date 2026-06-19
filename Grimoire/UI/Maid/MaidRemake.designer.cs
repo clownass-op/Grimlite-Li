@@ -1,4 +1,4 @@
-﻿namespace Grimoire.UI.Maid
+namespace Grimoire.UI.Maid
 {
 	partial class MaidRemake
 	{
@@ -54,6 +54,7 @@
             this.gbAdvancedOptions = new DarkUI.Controls.DarkGroupBox();
             this.cbAntiCounter = new DarkUI.Controls.DarkCheckBox();
             this.cbBypassAll = new DarkUI.Controls.DarkCheckBox();
+            this.cbTrackJson = new DarkUI.Controls.DarkCheckBox();
             this.cbCopyWalk = new DarkUI.Controls.DarkCheckBox();
             this.numHealthPercent = new DarkUI.Controls.DarkNumericUpDown();
             this.lbUseHeal2 = new DarkUI.Controls.DarkLabel();
@@ -353,6 +354,7 @@
             // 
             this.gbAdvancedOptions.Controls.Add(this.cbAntiCounter);
             this.gbAdvancedOptions.Controls.Add(this.cbBypassAll);
+            this.gbAdvancedOptions.Controls.Add(this.cbTrackJson);
             this.gbAdvancedOptions.Controls.Add(this.cbCopyWalk);
             this.gbAdvancedOptions.Controls.Add(this.numHealthPercent);
             this.gbAdvancedOptions.Controls.Add(this.lbUseHeal2);
@@ -394,6 +396,15 @@
             this.cbBypassAll.TabIndex = 30;
             this.cbBypassAll.Text = "Bypass All";
             this.cbBypassAll.CheckedChanged += new System.EventHandler(this.cbBypassAll_CheckedChanged);
+            // 
+            // cbTrackJson
+            // 
+            this.cbTrackJson.AutoSize = true;
+            this.cbTrackJson.Location = new System.Drawing.Point(187, 89);
+            this.cbTrackJson.Name = "cbTrackJson";
+            this.cbTrackJson.Size = new System.Drawing.Size(82, 17);
+            this.cbTrackJson.TabIndex = 31;
+            this.cbTrackJson.Text = "Track";
             // 
             // cbCopyWalk
             // 
@@ -794,6 +805,7 @@
 		private DarkUI.Controls.DarkComboBox cmbUltraBoss;
 		public DarkUI.Controls.DarkCheckBox cbAntiCounter;
 		public DarkUI.Controls.DarkCheckBox cbBypassAll;
+		public DarkUI.Controls.DarkCheckBox cbTrackJson;
 		private DarkUI.Controls.DarkCheckBox cbSpecialAnims;
 	}
 }

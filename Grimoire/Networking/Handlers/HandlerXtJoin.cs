@@ -1,10 +1,14 @@
-﻿using Grimoire.UI;
+using Grimoire.UI;
 using System;
+using Grimoire.Tools;
+using System.Text.RegularExpressions;
 
 namespace Grimoire.Networking.Handlers
 {
 	public class HandlerXtJoin : IXtMessageHandler
 	{
+		private static readonly Regex JoinedMapRegex = new Regex(@"(?:You joined|player in)\s+(?<map>[A-Za-z0-9_\-]+)", RegexOptions.IgnoreCase | RegexOptions.Compiled);
+
 		public string[] HandledCommands
 		{
 			get;
@@ -17,11 +21,30 @@ namespace Grimoire.Networking.Handlers
 		{
 			if (!message.RawContent.Contains("You joined "))
 				return;
+
+			string joinedMap = TryExtractJoinedMap(message);
+			if (!string.IsNullOrWhiteSpace(joinedMap))
+				AccountPresenceTracker.Instance.UpdateJoinedMap(joinedMap);
+			else
+				AccountPresenceTracker.Instance.RefreshNow();
 			if (BotManager.Instance.CustomName != null)
 				BotManager.Instance.CustomName = BotManager.Instance.CustomName;
 			if (BotManager.Instance.CustomGuild != null)
 				BotManager.Instance.CustomGuild = BotManager.Instance.CustomGuild;
 			//LogForm.Instance.AppendChat(string.Format("[{0:hh:mm:ss}] {1}", DateTime.Now, message.Arguments[4]));
+		}
+
+		private static string TryExtractJoinedMap(XtMessage message)
+		{
+			string text = message.Arguments != null && message.Arguments.Length > 4
+				? message.Arguments[4]
+				: message.RawContent;
+
+			if (string.IsNullOrWhiteSpace(text))
+				return null;
+
+			Match match = JoinedMapRegex.Match(text);
+			return match.Success ? match.Groups["map"].Value : null;
 		}
 	}
 

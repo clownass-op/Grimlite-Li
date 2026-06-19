@@ -27,6 +27,7 @@ namespace Grimoire.Tools.Buyback
             {
                 BaseAddress = new Uri("https://account.aq.com")
             };
+            _client.DefaultRequestHeaders.Add("User-Agent", "Grimoire/1.0");
         }
 
         public async Task Perform(string item, int pageCap)

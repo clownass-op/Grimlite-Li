@@ -217,7 +217,7 @@ namespace Grimoire.UI
 		private string _grabSearchKeyword = "";
 		private readonly List<TreeNode> _grabSearchResults = new List<TreeNode>();
 
-		private void btnGrab_Click(object sender, EventArgs e)
+		private async void btnGrab_Click(object sender, EventArgs e)
 		{
 			treeGrabbed.BeginUpdate();
 			treeGrabbed.Nodes.Clear();
@@ -233,6 +233,26 @@ namespace Grimoire.UI
                 case 1:
                     order = Grabber.OrderBy.Id;
                     break;
+            }
+
+            if (cbGrab.SelectedIndex == 8)
+            {
+                treeGrabbed.EndUpdate();
+                btnGrab.Enabled = false;
+                Cursor = Cursors.WaitCursor;
+                try
+                {
+                    List<MapItem> mapItems = await Task.Run(() => MapItemFinder.FindMapItems());
+                    treeGrabbed.BeginUpdate();
+                    Grabber.GrabMapItems(treeGrabbed, mapItems);
+                }
+                finally
+                {
+                    treeGrabbed.EndUpdate();
+                    btnGrab.Enabled = true;
+                    Cursor = Cursors.Default;
+                }
+                return;
             }
 
             switch (cbGrab.SelectedIndex)
@@ -410,7 +430,8 @@ namespace Grimoire.UI
 			"Temp inventory items",
 			"Bank items",
 			"Monsters",
-			"All Monsters"});
+			"All Monsters",
+			"GetMap Item IDs"});
 			this.cbGrab.Location = new System.Drawing.Point(12, 306);
 			this.cbGrab.Name = "cbGrab";
 			this.cbGrab.Size = new System.Drawing.Size(174, 21);
@@ -572,7 +593,7 @@ namespace Grimoire.UI
             cbOrderBy.Enabled = enableGrabOn.Any(filter => boxValue.IndexOf(filter,StringComparison.OrdinalIgnoreCase) >= 0); 
             //cbGrab.SelectedIndex == 1 || cbGrab.SelectedIndex == 2 || cbGrab.SelectedIndex == 6;
         }
-        string[] enableGrabOn = {"Monster","Quest"};
+        string[] enableGrabOn = {"Monster","Quest","GetMap"};
 
         private void btnForceAccept_Click(object sender, EventArgs e)
         {
