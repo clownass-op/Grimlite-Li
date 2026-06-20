@@ -9,8 +9,10 @@ namespace Grimoire.Botting.Commands.Misc
         public bool KeepLagkiller { get; set; } = false;
         public Task Execute(IBotEngine instance)
         {
+            LogForm.Instance.devDebug("[Stop] Stop Bot command executed");
             if (Configuration.Instance.BankOnStop)
             {
+                LogForm.Instance.devDebug("[Stop] BankOnStop is enabled, transferring items...");
                 foreach (InventoryItem item in Player.Inventory.Items)
                 {
                     if (!item.IsEquipped && item.IsAcItem && item.Category != "Class" && item.Name.ToLower() != "treasure potion" && Configuration.Instance.Items.Contains(item.Name))
@@ -23,9 +25,11 @@ namespace Grimoire.Botting.Commands.Misc
                 LogForm.Instance.AppendDebug("Banked all AC Items in Items list");
             }
             Configuration.Instance.keepLagKiller = KeepLagkiller;
-            //LogForm.Instance.AppendDebug($"Keep lag killer : {KeepLagkiller}");
+            LogForm.Instance.devDebug($"[Stop] Keep lag killer set to: {KeepLagkiller}");
             Task.Delay(2000);
+            LogForm.Instance.devDebug("[Stop] Calling instance.Stop()");
             instance.Stop();
+            LogForm.Instance.devDebug("[Stop] Bot stopped");
             return Task.FromResult<object>(null);
         }
 

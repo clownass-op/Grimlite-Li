@@ -1199,8 +1199,26 @@ namespace Grimoire.UI
             // Load UI settings from ClientConfig.cfg
             _config = Config.Load(Application.StartupPath + "\\ClientConfig.cfg");
             
-            // Load accounts from CharSelect.cfg
-            _charSelectConfig = Config.Load(Application.StartupPath + "\\CharSelect.cfg");
+            // Load accounts from CharSelect.cfg in %appdata%\grimoire
+            string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            string grimoirePath = Path.Combine(appData, "grimoire");
+            if (!Directory.Exists(grimoirePath))
+            {
+                Directory.CreateDirectory(grimoirePath);
+            }
+            string charSelectPath = Path.Combine(grimoirePath, "CharSelect.cfg");
+            
+            // Copy from startup path if doesn't exist in appdata
+            if (!File.Exists(charSelectPath))
+            {
+                string sourcePath = Path.Combine(Application.StartupPath, "CharSelect.cfg");
+                if (File.Exists(sourcePath))
+                {
+                    File.Copy(sourcePath, charSelectPath);
+                }
+            }
+            
+            _charSelectConfig = Config.Load(charSelectPath);
             _accounts.Clear();
             flowAccounts.Controls.Clear();
 
@@ -2247,7 +2265,10 @@ namespace Grimoire.UI
                 // Ensure charSelectConfig is loaded
                 if (_charSelectConfig == null)
                 {
-                    _charSelectConfig = Config.Load(Application.StartupPath + "\\CharSelect.cfg");
+                    string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                    string grimoirePath = Path.Combine(appData, "grimoire");
+                    string charSelectPath = Path.Combine(grimoirePath, "CharSelect.cfg");
+                    _charSelectConfig = Config.Load(charSelectPath);
                 }
 
                 var toRemove = _selected.OrderByDescending(i => i).ToList();
@@ -2283,7 +2304,10 @@ namespace Grimoire.UI
                 // Ensure charSelectConfig is loaded
                 if (_charSelectConfig == null)
                 {
-                    _charSelectConfig = Config.Load(Application.StartupPath + "\\CharSelect.cfg");
+                    string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+                    string grimoirePath = Path.Combine(appData, "grimoire");
+                    string charSelectPath = Path.Combine(grimoirePath, "CharSelect.cfg");
+                    _charSelectConfig = Config.Load(charSelectPath);
                 }
 
                 var user = tbNewUsername.Text?.Trim();

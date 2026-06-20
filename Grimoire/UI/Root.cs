@@ -403,11 +403,35 @@ namespace Grimoire.UI
         }
 
         private List<CharInfo> chars = new List<CharInfo>();
+        
+        private static string GetAppDataPath()
+        {
+            string appData = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData);
+            string grimoirePath = Path.Combine(appData, "grimoire");
+            if (!Directory.Exists(grimoirePath))
+            {
+                Directory.CreateDirectory(grimoirePath);
+            }
+            return grimoirePath;
+        }
+        
         public void LoadCharSelect()
         {
             menuCharSelect.Visible = true;
             if (chars.Count > 0) return;
-            Config config = Config.Load(Application.StartupPath + "\\CharSelect.cfg");
+            string charSelectPath = Path.Combine(GetAppDataPath(), "CharSelect.cfg");
+            
+            // Copy from startup path if doesn't exist in appdata
+            if (!File.Exists(charSelectPath))
+            {
+                string sourcePath = Path.Combine(Application.StartupPath, "CharSelect.cfg");
+                if (File.Exists(sourcePath))
+                {
+                    File.Copy(sourcePath, charSelectPath);
+                }
+            }
+            
+            Config config = Config.Load(charSelectPath);
             int i = 0;
             while (i >= 0)
             {

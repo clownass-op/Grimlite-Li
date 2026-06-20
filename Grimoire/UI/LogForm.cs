@@ -141,7 +141,7 @@ namespace Grimoire.UI
 		//
 		public void devDebug(string msg) 
 		{
-			if (ClientConfig.GetValue(ClientConfig.C_LOG_DEBUG_SWF) == "true")
+			if (IsDebugLoggingEnabled || ClientConfig.GetValue(ClientConfig.C_LOG_DEBUG_SWF) == "true")
 			{
 				Console.WriteLine(msg);
 				AppendDebug(msg);

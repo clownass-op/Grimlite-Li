@@ -740,6 +740,10 @@
     <Content Include="Loader\grimoire.swf">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
+    <Content Include="FFDec\**" Condition="Exists('FFDec')">
+      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
+      <Link>FFDec\%(RecursiveDir)%(Filename)%(Extension)</Link>
+    </Content>
     <Content Include="Resources\astolfo_head.png" />
     <None Include="Resources\Dropbox.png" />
     <None Include="Resources\astolfo.jpg" />
