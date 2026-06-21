@@ -728,9 +728,6 @@
   </ItemGroup>
   <ItemGroup>
     <Content Include="4zvbZ3m.ico" />
-    <Content Include="CharSelect.cfg">
-      <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
-    </Content>
     <Content Include="ClientConfig.cfg">
       <CopyToOutputDirectory>PreserveNewest</CopyToOutputDirectory>
     </Content>
