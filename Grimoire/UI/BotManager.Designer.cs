@@ -157,7 +157,7 @@ namespace Grimoire.UI
 		private DarkButton btnDown;
 		private DarkButton btnRemove;
 		private DarkButton btnUp;
-		private Panel panel1;
+		private DarkPanel panel1;
 		private SplitContainer splitContainer2;
 		private DarkButton btnSetSpawn;
 		private DarkButton btnBeep;
@@ -744,7 +744,7 @@ namespace Grimoire.UI
             this.btnRemove = new DarkUI.Controls.DarkButton();
             this.panel2 = new System.Windows.Forms.Panel();
             this.btnUp = new DarkUI.Controls.DarkButton();
-            this.panel1 = new System.Windows.Forms.Panel();
+            this.panel1 = new DarkUI.Controls.DarkPanel();
             this.splitContainer2 = new System.Windows.Forms.SplitContainer();
             this.checkBox1 = new DarkUI.Controls.DarkCheckBox();
             this.chkBuffup = new DarkUI.Controls.DarkCheckBox();
@@ -883,6 +883,7 @@ namespace Grimoire.UI
             this.lstCommands.SelectionMode = System.Windows.Forms.SelectionMode.MultiExtended;
             this.lstCommands.Size = new System.Drawing.Size(253, 254);
             this.lstCommands.TabIndex = 1;
+            this.lstCommands.Dock = System.Windows.Forms.DockStyle.None;
             this.lstCommands.Click += new System.EventHandler(this.lstCommands_Click);
             this.lstCommands.DrawItem += new System.Windows.Forms.DrawItemEventHandler(this.lstCommands_DrawItem);
             this.lstCommands.DragDrop += new System.Windows.Forms.DragEventHandler(this.lstCommands_DragDrop);
@@ -906,6 +907,7 @@ namespace Grimoire.UI
             this.lstBoosts.SelectionMode = System.Windows.Forms.SelectionMode.MultiExtended;
             this.lstBoosts.Size = new System.Drawing.Size(253, 249);
             this.lstBoosts.TabIndex = 25;
+            this.lstBoosts.Dock = System.Windows.Forms.DockStyle.None;
             this.lstBoosts.KeyDown += new System.Windows.Forms.KeyEventHandler(this.lstBoxs_KeyPress);
             // 
             // lstDrops
@@ -923,6 +925,7 @@ namespace Grimoire.UI
             this.lstDrops.SelectionMode = System.Windows.Forms.SelectionMode.MultiExtended;
             this.lstDrops.Size = new System.Drawing.Size(253, 249);
             this.lstDrops.TabIndex = 26;
+            this.lstDrops.Dock = System.Windows.Forms.DockStyle.None;
             this.lstDrops.KeyDown += new System.Windows.Forms.KeyEventHandler(this.lstBoxs_KeyPress);
             // 
             // lstItems
@@ -940,6 +943,7 @@ namespace Grimoire.UI
             this.lstItems.SelectionMode = System.Windows.Forms.SelectionMode.MultiExtended;
             this.lstItems.Size = new System.Drawing.Size(253, 249);
             this.lstItems.TabIndex = 145;
+            this.lstItems.Dock = System.Windows.Forms.DockStyle.None;
             this.lstItems.KeyDown += new System.Windows.Forms.KeyEventHandler(this.lstBoxs_KeyPress);
             // 
             // lstQuests
@@ -957,6 +961,7 @@ namespace Grimoire.UI
             this.lstQuests.SelectionMode = System.Windows.Forms.SelectionMode.MultiExtended;
             this.lstQuests.Size = new System.Drawing.Size(253, 249);
             this.lstQuests.TabIndex = 27;
+            this.lstQuests.Dock = System.Windows.Forms.DockStyle.None;
             this.lstQuests.KeyDown += new System.Windows.Forms.KeyEventHandler(this.lstBoxs_KeyPress);
             // 
             // lstSkills
@@ -974,6 +979,7 @@ namespace Grimoire.UI
             this.lstSkills.SelectionMode = System.Windows.Forms.SelectionMode.MultiExtended;
             this.lstSkills.Size = new System.Drawing.Size(253, 249);
             this.lstSkills.TabIndex = 28;
+            this.lstSkills.Dock = System.Windows.Forms.DockStyle.None;
             this.lstSkills.DoubleClick += new System.EventHandler(this.lstSkills_DoubleClick);
             this.lstSkills.KeyDown += new System.Windows.Forms.KeyEventHandler(this.lstBoxs_KeyPress);
             // 
@@ -1000,6 +1006,8 @@ namespace Grimoire.UI
             this.mainTabControl.Size = new System.Drawing.Size(549, 328);
             this.mainTabControl.TabIndex = 146;
             this.mainTabControl.Selected += new System.Windows.Forms.TabControlEventHandler(this.tabControl1_Selected);
+            // Hide arrow buttons by setting multiline mode
+            this.mainTabControl.Multiline = true;
             // 
             // tabCombat
             // 
@@ -5116,7 +5124,7 @@ namespace Grimoire.UI
             // 
             this.treeBots.AllowDrop = true;
             this.treeBots.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(46)))), ((int)(((byte)(46)))), ((int)(((byte)(56)))));
-            this.treeBots.Dock = System.Windows.Forms.DockStyle.Fill;
+            this.treeBots.Dock = System.Windows.Forms.DockStyle.None;
             this.treeBots.ForeColor = System.Drawing.Color.Gainsboro;
             this.treeBots.LineColor = System.Drawing.Color.DarkGray;
             this.treeBots.Location = new System.Drawing.Point(0, 0);
@@ -5865,7 +5873,7 @@ namespace Grimoire.UI
             this.panel4.Dock = System.Windows.Forms.DockStyle.Top;
             this.panel4.Location = new System.Drawing.Point(0, 22);
             this.panel4.Name = "panel4";
-            this.panel4.Size = new System.Drawing.Size(131, 51);
+            this.panel4.Size = new System.Drawing.Size(255, 51);
             this.panel4.TabIndex = 148;
             // 
             // chkEnable
@@ -5900,7 +5908,7 @@ namespace Grimoire.UI
             this.panel2.Dock = System.Windows.Forms.DockStyle.Top;
             this.panel2.Location = new System.Drawing.Point(0, 0);
             this.panel2.Name = "panel2";
-            this.panel2.Size = new System.Drawing.Size(131, 22);
+            this.panel2.Size = new System.Drawing.Size(255, 22);
             this.panel2.TabIndex = 147;
             // 
             // btnUp

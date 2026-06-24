@@ -40,6 +40,8 @@ namespace Grimoire.Botting.Commands.Combat
 		public string QuestId { get; set; }
 		public string SkillSet { get; set; } = "Auto Attack";
 		public int DelayAfterKill { get; set; } = 500;
+		public string TargetCell { get; set; }
+		public string TargetPad { get; set; } = "Left";
 
 		private Configuration config;
 		public async Task Execute(IBotEngine instance)
@@ -202,14 +204,36 @@ namespace Grimoire.Botting.Commands.Combat
 			// Kill loop with per-attack inventory checks
 			while (instance.IsRunning && Player.IsLoggedIn && Player.IsAlive && !foundRequired)
 			{
+				// Check if player is in correct cell (for cutscene repositioning)
+				if (!string.IsNullOrEmpty(TargetCell) && Player.Cell != TargetCell)
+				{
+					LogForm.Instance.AppendDebug($"[CmdKillFor] Wrong cell detected: {Player.Cell}, Target: {TargetCell}. Repositioning...");
+					Player.MoveToCell(TargetCell, TargetPad);
+					await instance.WaitUntil(() => Player.Cell == TargetCell, timeout: 5);
+					LogForm.Instance.AppendDebug($"[CmdKillFor] Successfully repositioned to cell {Player.Cell}");
+				}
+				
 				// Check if target is still available
 				if (!World.IsMonsterAvailable(Monster))
 				{
 					LogForm.Instance.AppendDebug($"[CmdKillFor] Monster {Monster} unavailable, retrying...");
-					await instance.WaitUntil(() => World.IsMonsterAvailable(Monster), null, 3);
+					// Wait longer for monster to become available (e.g., after cutscene)
+					await instance.WaitUntil(() => World.IsMonsterAvailable(Monster), null, 10);
 					
 					if (!World.IsMonsterAvailable(Monster))
+					{
+						LogForm.Instance.AppendDebug($"[CmdKillFor] Monster {Monster} still unavailable after wait, checking if quest can be completed...");
+						// Check if quest can be completed (e.g., boss defeated via cutscene)
+						if (Player.Quests.CanComplete(id))
+						{
+							LogForm.Instance.AppendDebug($"[CmdKillFor] Quest {id} can be completed, monster likely defeated via cutscene");
+							foundRequired = true;
+							break;
+						}
+						// If quest cannot be completed and monster still unavailable, break
+						LogForm.Instance.AppendDebug($"[CmdKillFor] Monster {Monster} unavailable and quest not completable, aborting hunt");
 						break;
+					}
 				}
 				
 				// Attack and execute skills

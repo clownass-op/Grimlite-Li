@@ -172,6 +172,17 @@ namespace Grimoire.UI
             cbSafeType.SelectedIndex = 0;
             botPacketSpammer = new PacketSpammer();
             
+            // Apply custom scrollbar to treeBots
+            BindCustomScrollBar(treeBots, darkPanel1);
+            
+            // Apply custom scrollbar to ListBox controls
+            BindCustomScrollBar(lstCommands, panel1);
+            BindCustomScrollBar(lstBoosts, panel1);
+            BindCustomScrollBar(lstDrops, panel1);
+            BindCustomScrollBar(lstItems, panel1);
+            BindCustomScrollBar(lstQuests, panel1);
+            BindCustomScrollBar(lstSkills, panel1);
+            
             // Wire up checkbox event for multi-aura controls
             chkMultiAura.CheckedChanged += (s, e) => {
                 txtAuraName2.Visible = chkMultiAura.Checked;
@@ -2819,20 +2830,42 @@ namespace Grimoire.UI
             if (cmdText.Contains(':'))
             {
                 toDraw = lstCommands.Items[e.Index].ToString().Split(':');
-                Region second = DrawString(e.Graphics, toDraw[0] + ": ", font, color, region, GetCurrentBoolCentered(scmd) ? centered : StringFormat.GenericDefault);
-                region = new RectangleF(region.X + second.GetBounds(e.Graphics).Width + 3, region.Y, region.Width, region.Height);
-                if (toDraw[1].Contains(","))
+                
+                // Special handling for CmdShortHunt: Quest ID in white, Hunt in green
+                if (cmd is CmdShortHunt)
                 {
-                    toDraw = toDraw[1].Split(',');
-                    Region third = DrawString(e.Graphics, toDraw[0], font, varColor, region, GetCurrentBoolCentered(scmd) ? centered : StringFormat.GenericDefault);
-                    for (int i = 1; i < toDraw.Length; i++)
+                    SolidBrush white = new SolidBrush(Color.White);
+                    SolidBrush green = new SolidBrush(Color.FromArgb(57, 255, 20));
+                    Region second = DrawString(e.Graphics, toDraw[0] + ": ", font, white, region, GetCurrentBoolCentered(scmd) ? centered : StringFormat.GenericDefault);
+                    region = new RectangleF(region.X + second.GetBounds(e.Graphics).Width + 3, region.Y, region.Width, region.Height);
+                    
+                    // Split "Hunt" from the rest
+                    if (toDraw[1].StartsWith("Hunt "))
                     {
+                        Region third = DrawString(e.Graphics, "Hunt ", font, green, region, GetCurrentBoolCentered(scmd) ? centered : StringFormat.GenericDefault);
                         region = new RectangleF(region.X + third.GetBounds(e.Graphics).Width + 3, region.Y, region.Width, region.Height);
-                        third = DrawString(e.Graphics, toDraw[i], font, eVarColor, region, GetCurrentBoolCentered(scmd) ? centered : StringFormat.GenericDefault);
+                        DrawString(e.Graphics, toDraw[1].Substring(5), font, varColor, region, GetCurrentBoolCentered(scmd) ? centered : StringFormat.GenericDefault);
                     }
+                    else
+                        DrawString(e.Graphics, toDraw[1], font, varColor, region, GetCurrentBoolCentered(scmd) ? centered : StringFormat.GenericDefault);
                 }
                 else
-                    DrawString(e.Graphics, toDraw[1], font, varColor, region, GetCurrentBoolCentered(scmd) ? centered : StringFormat.GenericDefault);
+                {
+                    Region second = DrawString(e.Graphics, toDraw[0] + ": ", font, color, region, GetCurrentBoolCentered(scmd) ? centered : StringFormat.GenericDefault);
+                    region = new RectangleF(region.X + second.GetBounds(e.Graphics).Width + 3, region.Y, region.Width, region.Height);
+                    if (toDraw[1].Contains(","))
+                    {
+                        toDraw = toDraw[1].Split(',');
+                        Region third = DrawString(e.Graphics, toDraw[0], font, varColor, region, GetCurrentBoolCentered(scmd) ? centered : StringFormat.GenericDefault);
+                        for (int i = 1; i < toDraw.Length; i++)
+                        {
+                            region = new RectangleF(region.X + third.GetBounds(e.Graphics).Width + 3, region.Y, region.Width, region.Height);
+                            third = DrawString(e.Graphics, toDraw[i], font, eVarColor, region, GetCurrentBoolCentered(scmd) ? centered : StringFormat.GenericDefault);
+                        }
+                    }
+                    else
+                        DrawString(e.Graphics, toDraw[1], font, varColor, region, GetCurrentBoolCentered(scmd) ? centered : StringFormat.GenericDefault);
+                }
             }
             else
                 DrawString(e.Graphics, cmdText, font, color, region, GetCurrentBoolCentered(scmd) ? centered : StringFormat.GenericDefault);
@@ -4327,6 +4360,237 @@ namespace Grimoire.UI
                 Type = Skill.SkillType.Safe,
                 IsSafeMp = chkSafeSkillMp.Checked
             });
+        }
+
+        // Custom scrollbar implementation
+        private const int SB_VERT = 1;
+        private const int WM_VSCROLL = 0x0115;
+        private const int SIF_RANGE = 0x0001;
+        private const int SIF_PAGE = 0x0002;
+        private const int SIF_POS = 0x0004;
+        private const int SIF_ALL = SIF_RANGE | SIF_PAGE | SIF_POS;
+        private const int SB_THUMBPOSITION = 4;
+
+        [DllImport("user32.dll")]
+        private static extern int GetScrollPos(IntPtr hWnd, int nBar);
+
+        [DllImport("user32.dll")]
+        private static extern int SetScrollPos(IntPtr hWnd, int nBar, int nPos, bool bRedraw);
+
+        [DllImport("user32.dll")]
+        private static extern bool GetScrollInfo(IntPtr hWnd, int nBar, ref SCROLLINFO scrollInfo);
+
+        [DllImport("user32.dll")]
+        private static extern bool ShowScrollBar(IntPtr hWnd, int wBar, bool bShow);
+
+        [DllImport("user32.dll")]
+        private static extern IntPtr SendMessage(IntPtr hWnd, int msg, IntPtr wParam, IntPtr lParam);
+
+        [StructLayout(LayoutKind.Sequential)]
+        private struct SCROLLINFO
+        {
+            public int cbSize;
+            public int fMask;
+            public int nMin;
+            public int nMax;
+            public int nPage;
+            public int nPos;
+            public int nTrackPos;
+        }
+
+        private SCROLLINFO GetScrollInfo(TreeView tv)
+        {
+            var info = new SCROLLINFO();
+            info.cbSize = Marshal.SizeOf(info);
+            info.fMask = SIF_ALL;
+            GetScrollInfo(tv.Handle, SB_VERT, ref info);
+            return info;
+        }
+
+        private SCROLLINFO GetScrollInfo(ListBox lb)
+        {
+            var info = new SCROLLINFO();
+            info.cbSize = Marshal.SizeOf(info);
+            info.fMask = SIF_ALL;
+            GetScrollInfo(lb.Handle, SB_VERT, ref info);
+            return info;
+        }
+
+        private void BindCustomScrollBar(Control scrollableControl, DarkPanel container)
+        {
+            var scrollBar = new DarkScrollBar
+            {
+                Width = 12,
+                ScrollOrientation = DarkScrollOrientation.Vertical,
+                Minimum = 0,
+                Maximum = 100,
+                Value = 0,
+                Visible = false, // Start hidden
+                BackColor = System.Drawing.Color.FromArgb(36, 36, 46)
+            };
+
+            container.Controls.Add(scrollBar);
+            scrollBar.BringToFront();
+
+            scrollableControl.Dock = DockStyle.None;
+            scrollableControl.Left = 0;
+            scrollableControl.Top = 0;
+
+            Action updateLayout = () =>
+            {
+                if (scrollableControl.IsDisposed || container.IsDisposed) return;
+                
+                // Make control wider to clip native scrollbar, position custom scrollbar on right
+                // For ListBox controls, also make control shorter to match scrollbar height for proper scrolling
+                int offset = 75;
+                if (scrollableControl is ListBox)
+                {
+                    scrollableControl.Height = container.Height - offset;
+                }
+                else
+                {
+                    scrollableControl.Height = container.Height;
+                }
+                // Make control wider to clip native scrollbar, but not so wide that outline overlaps scrollbar
+                scrollableControl.Width = container.Width + SystemInformation.VerticalScrollBarWidth - scrollBar.Width;
+                
+                if (scrollBar.Visible)
+                {
+                    scrollBar.Left = container.Width - scrollBar.Width;
+                    scrollBar.Top = 0;
+                    // Stop scrollbar above the up button with more space for ListBox, full height for TreeView
+                    scrollBar.Height = scrollableControl is ListBox ? container.Height - offset : container.Height;
+                    scrollBar.BringToFront();
+                }
+            };
+
+            container.Resize += (s, e) => updateLayout();
+
+            scrollBar.ValueChanged += (s, e) =>
+            {
+                if (scrollableControl.IsDisposed) return;
+                
+                if (scrollableControl is TreeView tv)
+                {
+                    // Set scroll position and send scroll message to TreeView
+                    SetScrollPos(tv.Handle, SB_VERT, e.Value, true);
+                    SendMessage(tv.Handle, WM_VSCROLL, new IntPtr((e.Value << 16) | SB_THUMBPOSITION), IntPtr.Zero);
+                }
+                else if (scrollableControl is ListBox lb)
+                {
+                    // Set scroll position and send scroll message to ListBox
+                    SetScrollPos(lb.Handle, SB_VERT, e.Value, true);
+                    SendMessage(lb.Handle, WM_VSCROLL, new IntPtr((e.Value << 16) | SB_THUMBPOSITION), IntPtr.Zero);
+                }
+            };
+
+            Action sync = () =>
+            {
+                if (scrollableControl.IsDisposed || scrollBar.IsDisposed) return;
+
+                if (scrollableControl is TreeView tv)
+                {
+                    var scrollInfo = GetScrollInfo(tv);
+
+                    bool shouldBeVisible = scrollInfo.nPage > 0 && 
+                                           scrollInfo.nMax > 0 && 
+                                           (uint)scrollInfo.nPage < (uint)scrollInfo.nMax;
+
+                    if (scrollBar.Visible != shouldBeVisible)
+                    {
+                        scrollBar.Visible = shouldBeVisible;
+                        updateLayout();
+                    }
+                    else if (scrollBar.Visible)
+                    {
+                        scrollBar.BringToFront();
+                    }
+
+                    if (shouldBeVisible)
+                    {
+                        scrollBar.Minimum = scrollInfo.nMin;
+                        scrollBar.Maximum = scrollInfo.nMax;
+                        scrollBar.ViewSize = (int)scrollInfo.nPage;
+                        
+                        int maxVal = scrollBar.Maximum - scrollBar.ViewSize;
+                        int targetVal = Math.Max(scrollInfo.nMin, Math.Min(scrollInfo.nPos, maxVal));
+                        if (scrollBar.Value != targetVal)
+                            scrollBar.Value = targetVal;
+                    }
+                }
+                else if (scrollableControl is ListBox lb)
+                {
+                    var scrollInfo = GetScrollInfo(lb);
+
+                    bool shouldBeVisible = scrollInfo.nPage > 0 && 
+                                           scrollInfo.nMax > 0 && 
+                                           (uint)scrollInfo.nPage < (uint)scrollInfo.nMax;
+
+                    if (scrollBar.Visible != shouldBeVisible)
+                    {
+                        scrollBar.Visible = shouldBeVisible;
+                        updateLayout();
+                    }
+                    else if (scrollBar.Visible)
+                    {
+                        scrollBar.BringToFront();
+                    }
+
+                    if (shouldBeVisible)
+                    {
+                        scrollBar.Minimum = scrollInfo.nMin;
+                        scrollBar.Maximum = scrollInfo.nMax;
+                        scrollBar.ViewSize = (int)scrollInfo.nPage;
+                        
+                        int maxVal = scrollBar.Maximum - scrollBar.ViewSize;
+                        int targetVal = Math.Max(scrollInfo.nMin, Math.Min(scrollInfo.nPos, maxVal));
+                        if (scrollBar.Value != targetVal)
+                            scrollBar.Value = targetVal;
+                    }
+                }
+            };
+
+            if (scrollableControl is TreeView tv2)
+            {
+                tv2.MouseWheel += (s, e) => sync();
+                container.MouseWheel += (s, e) => { tv2.Focus(); sync(); };
+                tv2.SizeChanged += (s, e) => sync();
+                tv2.AfterExpand += (s, e) => sync();
+                tv2.AfterCollapse += (s, e) => sync();
+                tv2.NodeMouseClick += (s, e) => sync();
+                tv2.Layout += (s, e) => sync();
+                tv2.HandleCreated += (s, e) =>
+                {
+                    // Delay sync() until TreeView is fully created and laid out
+                    if (tv2.IsHandleCreated)
+                    {
+                        tv2.BeginInvoke(new Action(() =>
+                        {
+                            updateLayout();
+                            sync();
+                        }));
+                    }
+                };
+            }
+            else if (scrollableControl is ListBox lb2)
+            {
+                lb2.MouseWheel += (s, e) => sync();
+                container.MouseWheel += (s, e) => { lb2.Focus(); sync(); };
+                lb2.SizeChanged += (s, e) => sync();
+                lb2.Layout += (s, e) => sync();
+                lb2.HandleCreated += (s, e) =>
+                {
+                    // Delay sync() until ListBox is fully created and laid out
+                    if (lb2.IsHandleCreated)
+                    {
+                        lb2.BeginInvoke(new Action(() =>
+                        {
+                            updateLayout();
+                            sync();
+                        }));
+                    }
+                };
+            }
         }
     }
 }

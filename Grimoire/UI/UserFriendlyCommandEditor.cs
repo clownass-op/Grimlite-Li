@@ -695,6 +695,12 @@ namespace Grimoire.UI
                             case "SkillSet":
                                 lblText = "Skill Set";
                                 break;
+                            case "MapItemId":
+                                lblText = "Map Item ID";
+                                break;
+                            case "MapItemQuantity":
+                                lblText = "Map Item Qty";
+                                break;
                         }
                         
                         // For aura commands, add "Multiple Auras" checkbox before Value4

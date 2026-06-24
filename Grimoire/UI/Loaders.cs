@@ -210,7 +210,7 @@ namespace Grimoire.UI
             }
         }
 
-        public static Grabber.OrderBy order = Grabber.OrderBy.Name;
+        public static Grabber.OrderBy order = Grabber.OrderBy.Id;
         
 		// Search state for treeGrabbed
 		private int _grabSearchIndex = 0;
