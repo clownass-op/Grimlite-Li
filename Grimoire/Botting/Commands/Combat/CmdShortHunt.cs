@@ -38,6 +38,7 @@ namespace Grimoire.Botting.Commands.Combat
             string[] _pad = instance.ResolveVars(Pad).Split(',');
             string _MapItemId = instance.ResolveVars(MapItemId);
             string _MapItemQty = instance.ResolveVars(MapItemQuantity);
+            string _Monster = instance.ResolveVars(Monster);
 
             // Parse comma-separated items and quantities
             string[] itemNames = _Items.Split(',');
@@ -57,15 +58,100 @@ namespace Grimoire.Botting.Commands.Combat
                     quantities[i] = "1";
             }
 
+            // Parse monsters with optional cell mapping
+            // Format: "Monster1:cell1 | cell2, Monster2:cell3 | cell4" or just "Monster1, Monster2"
+            string[] monsterNames = new string[itemNames.Length];
+            string[] monsterJumpCells = new string[itemNames.Length];
+            
+            if (!string.IsNullOrEmpty(_Monster))
+            {
+                string[] rawMonsters = _Monster.Split(',');
+                for (int i = 0; i < itemNames.Length; i++)
+                {
+                    string rawMonster;
+                    if (i < rawMonsters.Length)
+                        rawMonster = rawMonsters[i].Trim();
+                    else
+                        rawMonster = rawMonsters[rawMonsters.Length - 1].Trim();
+                    
+                    // Check if monster has cell mapping (format: "Monster:cell1 | cell2")
+                    if (rawMonster.Contains(':'))
+                    {
+                        string[] parts = rawMonster.Split(':');
+                        monsterNames[i] = parts[0].Trim();
+                        if (parts.Length > 1)
+                        {
+                            string cellPart = parts[1].Trim();
+                            // Parse | separator for cell-jumping
+                            if (cellPart.Contains('|'))
+                            {
+                                string[] cellParts = cellPart.Split('|');
+                                // Build jump cells list: only extras (CmdKillFor will add primary as first cell)
+                                var jumpList = new System.Collections.Generic.List<string>();
+                                for (int j = 1; j < cellParts.Length; j++)
+                                {
+                                    string c = cellParts[j].Trim();
+                                    if (!string.IsNullOrEmpty(c))
+                                        jumpList.Add(c);
+                                }
+                                monsterJumpCells[i] = string.Join(",", jumpList.ToArray());
+                                LogForm.Instance.AppendDebug($"[CmdShortHunt] Monster {monsterNames[i]} cell rotation: {monsterJumpCells[i]}");
+                            }
+                            else
+                            {
+                                monsterJumpCells[i] = "";
+                            }
+                        }
+                        else
+                        {
+                            monsterJumpCells[i] = "";
+                        }
+                    }
+                    else
+                    {
+                        monsterNames[i] = rawMonster;
+                        monsterJumpCells[i] = "";
+                    }
+                }
+            }
+
             // Associate each item with its corresponding cell
             // If cells array is shorter than items, use the last cell for remaining items
             string[] itemCells = new string[itemNames.Length];
+            // For each item, store the primary cell and an optional list of jump cells (rotated when no monsters)
+            // Format: "r4 | r5" means primary cell is r4, jump cells are [r4, r5]
+            // Format: "r4" means primary cell is r4, no jumping
+            string[] itemJumpCells = new string[itemNames.Length];
             for (int i = 0; i < itemNames.Length; i++)
             {
+                string rawCell;
                 if (i < _Cells.Length)
-                    itemCells[i] = _Cells[i];
+                    rawCell = _Cells[i];
                 else
-                    itemCells[i] = _Cells[_Cells.Length - 1];
+                    rawCell = _Cells[_Cells.Length - 1];
+
+                // Parse | separator for cell-jumping
+                if (rawCell.Contains('|'))
+                {
+                    string[] cellParts = rawCell.Split('|');
+                    // First part is the primary cell, rest are jump cells
+                    itemCells[i] = cellParts[0].Trim();
+                    // Build jump cells list: only extras (CmdKillFor will add primary as first cell)
+                    var jumpList = new System.Collections.Generic.List<string>();
+                    for (int j = 1; j < cellParts.Length; j++)
+                    {
+                        string c = cellParts[j].Trim();
+                        if (!string.IsNullOrEmpty(c))
+                            jumpList.Add(c);
+                    }
+                    itemJumpCells[i] = string.Join(",", jumpList.ToArray());
+                    LogForm.Instance.AppendDebug($"[CmdShortHunt] Item {itemNames[i]} cell rotation: {itemJumpCells[i]}");
+                }
+                else
+                {
+                    itemCells[i] = rawCell.Trim();
+                    itemJumpCells[i] = "";
+                }
             }
 
             LogForm.Instance.AppendDebug($"[CmdShortHunt] Starting hunt for {itemNames.Length} item(s) on map {_Map}");
@@ -117,6 +203,24 @@ namespace Grimoire.Botting.Commands.Combat
                     {
                         LogForm.Instance.AppendDebug($"[CmdShortHunt] Quest {qid} accepted successfully!");
                     }
+                }
+            }
+
+            // Join the map if not already on it
+            if (!string.IsNullOrEmpty(_Map))
+            {
+                string targetMap = _Map.Split('-')[0];
+                if (!Player.Map.Equals(targetMap, StringComparison.OrdinalIgnoreCase))
+                {
+                    LogForm.Instance.AppendDebug($"[CmdShortHunt] Joining map {_Map}...");
+                    CmdJoin mapJoin = new CmdJoin
+                    {
+                        Map = _Map,
+                        Cell = itemCells[0],
+                        Pad = _pad.Length > 0 ? _pad[0] : "Left"
+                    };
+                    await mapJoin.Execute(instance);
+                    await Task.Delay(1500);
                 }
             }
 
@@ -200,20 +304,47 @@ namespace Grimoire.Botting.Commands.Combat
                 if (itemObtained)
                     continue;
 
-                // Move to the designated cell for this item
-                if (Player.Cell != currentCell)
+                // Determine which monster and cell to use for this item
+                string currentMonster = (!string.IsNullOrEmpty(_Monster) && !string.IsNullOrEmpty(monsterNames[itemIdx])) ? monsterNames[itemIdx] : Monster;
+                string useCell = currentCell;
+                string useJumpCells = itemJumpCells[itemIdx];
+                
+                // If monster has cell mapping, use monster's cell instead of item's cell
+                if (!string.IsNullOrEmpty(monsterJumpCells[itemIdx]))
                 {
-                    LogForm.Instance.AppendDebug($"[CmdShortHunt] Moving to cell {currentCell} pad {currentPad}");
-                    Player.MoveToCell(currentCell, currentPad);
+                    // Parse monster's cell mapping to get primary cell
+                    string rawMonster = (!string.IsNullOrEmpty(_Monster) && itemIdx < _Monster.Split(',').Length) ? _Monster.Split(',')[itemIdx].Trim() : "";
+                    if (rawMonster.Contains(':'))
+                    {
+                        string cellPart = rawMonster.Split(':')[1].Trim();
+                        if (cellPart.Contains('|'))
+                        {
+                            useCell = cellPart.Split('|')[0].Trim();
+                        }
+                        else
+                        {
+                            useCell = cellPart;
+                        }
+                        useJumpCells = monsterJumpCells[itemIdx];
+                    }
+                }
+
+                LogForm.Instance.AppendDebug($"[CmdShortHunt] Hunting for {currentItem}x{currentQty} at cell {useCell} with monster {currentMonster}");
+
+                // Move to the designated cell for this item
+                if (Player.Cell != useCell)
+                {
+                    LogForm.Instance.AppendDebug($"[CmdShortHunt] Moving to cell {useCell} pad {currentPad}");
+                    Player.MoveToCell(useCell, currentPad);
                     // Wait until player is actually in the correct cell
-                    await instance.WaitUntil(() => Player.Cell == currentCell, timeout: 5);
+                    await instance.WaitUntil(() => Player.Cell == useCell, timeout: 5);
                     LogForm.Instance.AppendDebug($"[CmdShortHunt] Successfully moved to cell {Player.Cell}");
                 }
 
                 // Hunt for this specific item
                 CmdKillFor killFor = new CmdKillFor
                 {
-                    Monster = Monster,
+                    Monster = currentMonster,
                     ItemName = currentItem,
                     ItemType = ItemType,
                     Quantity = currentQty,
@@ -222,8 +353,9 @@ namespace Grimoire.Botting.Commands.Combat
                     KillPriority = KillPriority,
                     AntiCounter = AntiCounter,
                     SkillSet = SkillSet,
-                    TargetCell = currentCell,
-                    TargetPad = currentPad
+                    TargetCell = useCell,
+                    TargetPad = currentPad,
+                    JumpCells = useJumpCells
                 };
 
                 LogForm.Instance.AppendDebug($"[CmdShortHunt] Starting kill loop for {currentItem}");
@@ -231,12 +363,12 @@ namespace Grimoire.Botting.Commands.Combat
                 LogForm.Instance.AppendDebug($"[CmdShortHunt] Hunt complete for {currentItem}");
                 
                 // Verify and reposition to correct cell after cutscene
-                if (Player.Cell != currentCell)
+                if (Player.Cell != useCell)
                 {
-                    LogForm.Instance.AppendDebug($"[CmdShortHunt] Current cell: {Player.Cell}, Target cell: {currentCell}. Repositioning...");
-                    Player.MoveToCell(currentCell, currentPad);
+                    LogForm.Instance.AppendDebug($"[CmdShortHunt] Current cell: {Player.Cell}, Target cell: {useCell}. Repositioning...");
+                    Player.MoveToCell(useCell, currentPad);
                     // Wait until player is actually in the correct cell
-                    await instance.WaitUntil(() => Player.Cell == currentCell, timeout: 5);
+                    await instance.WaitUntil(() => Player.Cell == useCell, timeout: 5);
                     LogForm.Instance.AppendDebug($"[CmdShortHunt] Successfully repositioned to cell {Player.Cell}");
                 }
                 

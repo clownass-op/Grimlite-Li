@@ -1,4 +1,5 @@
 using Newtonsoft.Json;
+using System.Collections.Generic;
 
 namespace Grimoire.Game.Data
 {
@@ -74,6 +75,10 @@ namespace Grimoire.Game.Data
             get;
             set;
         }
+
+        [JsonProperty("oItems")]
+        public List<InventoryItem> Drops { get; set; }
+
         [JsonIgnore]
         public bool IsAlive => Health > 0;
     }

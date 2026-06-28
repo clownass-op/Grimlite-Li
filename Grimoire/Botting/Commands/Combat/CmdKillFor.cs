@@ -42,6 +42,12 @@ namespace Grimoire.Botting.Commands.Combat
 		public int DelayAfterKill { get; set; } = 500;
 		public string TargetCell { get; set; }
 		public string TargetPad { get; set; } = "Left";
+		/// <summary>
+		/// Optional list of additional cells to rotate through when no monsters are available in the current cell.
+		/// When set, the bot will jump to the next cell in the list (cycling back to the start) if no monsters are detected.
+		/// Format: comma-separated cells, e.g. "r4,r5". The TargetCell is always the starting cell.
+		/// </summary>
+		public string JumpCells { get; set; } = "";
 
 		private Configuration config;
 		public async Task Execute(IBotEngine instance)
@@ -126,6 +132,28 @@ namespace Grimoire.Botting.Commands.Combat
 			for (int i = 0; i < quantities.Length; i++)
 				quantities[i] = quantities[i].Trim();
 			
+			// Parse JumpCells (cell rotation list) - includes TargetCell as the first cell
+			string[] jumpCellList = null;
+			int jumpCellIndex = 0;
+			if (!string.IsNullOrEmpty(JumpCells))
+			{
+				string[] extraCells = JumpCells.Split(',');
+				var cellList = new List<string>();
+				if (!string.IsNullOrEmpty(TargetCell))
+					cellList.Add(TargetCell);
+				for (int i = 0; i < extraCells.Length; i++)
+				{
+					string c = extraCells[i].Trim();
+					if (!string.IsNullOrEmpty(c))
+						cellList.Add(c);
+				}
+				if (cellList.Count > 1)
+				{
+					jumpCellList = cellList.ToArray();
+					LogForm.Instance.AppendDebug($"[CmdKillFor] Cell rotation enabled: {string.Join(" -> ", jumpCellList)}");
+				}
+			}
+			
 			// Create a background task to check inventory every 1 second while killing
 			var inventoryCheckTask = Task.Run(async () =>
 			{
@@ -204,8 +232,22 @@ namespace Grimoire.Botting.Commands.Combat
 			// Kill loop with per-attack inventory checks
 			while (instance.IsRunning && Player.IsLoggedIn && Player.IsAlive && !foundRequired)
 			{
-				// Check if player is in correct cell (for cutscene repositioning)
-				if (!string.IsNullOrEmpty(TargetCell) && Player.Cell != TargetCell)
+				// Check if player is in correct cell (for cutscene repositioning).
+				// When cell rotation is enabled, accept any cell in the rotation list as valid
+				// so we don't fight the rotation by teleporting back to TargetCell.
+				bool inValidCell = string.IsNullOrEmpty(TargetCell) || Player.Cell == TargetCell;
+				if (!inValidCell && jumpCellList != null)
+				{
+					foreach (string validCell in jumpCellList)
+					{
+						if (Player.Cell == validCell)
+						{
+							inValidCell = true;
+							break;
+						}
+					}
+				}
+				if (!inValidCell)
 				{
 					LogForm.Instance.AppendDebug($"[CmdKillFor] Wrong cell detected: {Player.Cell}, Target: {TargetCell}. Repositioning...");
 					Player.MoveToCell(TargetCell, TargetPad);
@@ -217,9 +259,24 @@ namespace Grimoire.Botting.Commands.Combat
 				if (!World.IsMonsterAvailable(Monster))
 				{
 					LogForm.Instance.AppendDebug($"[CmdKillFor] Monster {Monster} unavailable, retrying...");
+
+					// If cell rotation is enabled, jump immediately to the next cell
+					// instead of waiting for the monster to respawn in the current cell.
+					if (jumpCellList != null && jumpCellList.Length > 1)
+					{
+						jumpCellIndex = (jumpCellIndex + 1) % jumpCellList.Length;
+						string nextCell = jumpCellList[jumpCellIndex];
+						LogForm.Instance.AppendDebug($"[CmdKillFor] No monsters in current cell, rotating to cell {nextCell} ({jumpCellIndex + 1}/{jumpCellList.Length})");
+						Player.MoveToCell(nextCell, TargetPad);
+						await instance.WaitUntil(() => Player.Cell == nextCell, timeout: 5);
+						// After jumping, give monsters a moment to spawn
+						await Task.Delay(500);
+						continue;
+					}
+
 					// Wait longer for monster to become available (e.g., after cutscene)
 					await instance.WaitUntil(() => World.IsMonsterAvailable(Monster), null, 10);
-					
+
 					if (!World.IsMonsterAvailable(Monster))
 					{
 						LogForm.Instance.AppendDebug($"[CmdKillFor] Monster {Monster} still unavailable after wait, checking if quest can be completed...");
@@ -230,6 +287,20 @@ namespace Grimoire.Botting.Commands.Combat
 							foundRequired = true;
 							break;
 						}
+
+						// Cell rotation: if JumpCells is set and no monsters, jump to next cell
+						if (jumpCellList != null && jumpCellList.Length > 1)
+						{
+							jumpCellIndex = (jumpCellIndex + 1) % jumpCellList.Length;
+							string nextCell = jumpCellList[jumpCellIndex];
+							LogForm.Instance.AppendDebug($"[CmdKillFor] No monsters in current cell, rotating to cell {nextCell} ({jumpCellIndex + 1}/{jumpCellList.Length})");
+							Player.MoveToCell(nextCell, TargetPad);
+							await instance.WaitUntil(() => Player.Cell == nextCell, timeout: 5);
+							// After jumping, give monsters a moment to spawn
+							await Task.Delay(500);
+							continue;
+						}
+
 						// If quest cannot be completed and monster still unavailable, break
 						LogForm.Instance.AppendDebug($"[CmdKillFor] Monster {Monster} unavailable and quest not completable, aborting hunt");
 						break;

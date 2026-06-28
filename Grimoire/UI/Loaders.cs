@@ -69,6 +69,57 @@ namespace Grimoire.UI
             InitializeComponent();
             toolTip = new System.Windows.Forms.ToolTip();
             toolTip.SetToolTip(btnForceAccept, "Ghost accept the quest");
+            treeGrabbed.BeforeExpand += TreeGrabbed_BeforeExpand;
+            treeGrabbed.NodeMouseClick += TreeGrabbed_NodeMouseClick;
+        }
+
+        private async void TreeGrabbed_BeforeExpand(object sender, TreeViewCancelEventArgs e)
+        {
+            TreeNode node = e.Node;
+
+            if (node.Tag is string tag)
+            {
+                if (!tag.StartsWith("__drops__:") && node.Nodes.Count == 1 && node.Nodes[0].Text == "Loading...")
+                {
+                    await Grabber.Monster_Drops(node, tag);
+                }
+                else if (tag.StartsWith("__drops__:"))
+                {
+                    string monsterName = tag.Substring("__drops__:".Length);
+                    if (node.Nodes.Count == 1 && node.Nodes[0].Text == "Click to load...")
+                    {
+                        node.Nodes.Clear();
+                        node.Nodes.Add("Loading drops...");
+                        await Grabber.Monster_Drops_Wiki(node, monsterName);
+                    }
+                }
+            }
+        }
+
+        private async void TreeGrabbed_NodeMouseClick(object sender, TreeNodeMouseClickEventArgs e)
+        {
+            TreeNode node = e.Node;
+
+            if (node.Tag is string tag)
+            {
+                if (!tag.StartsWith("__drops__:") && node.Nodes.Count == 1 && node.Nodes[0].Text == "Loading...")
+                {
+                    await Grabber.Monster_Drops(node, tag);
+                }
+                else if (tag.StartsWith("__drops__:"))
+                {
+                    string monsterName = tag.Substring("__drops__:".Length);
+                    if (node.Nodes.Count == 1 && (node.Nodes[0].Text == "Click to load..." || node.Nodes[0].Text == "Loading drops..."))
+                    {
+                        if (node.Nodes[0].Text == "Click to load...")
+                        {
+                            node.Nodes.Clear();
+                            node.Nodes.Add("Loading drops...");
+                        }
+                        await Grabber.Monster_Drops_Wiki(node, monsterName);
+                    }
+                }
+            }
         }
         private System.Windows.Forms.ToolTip toolTip;
 
@@ -235,7 +286,7 @@ namespace Grimoire.UI
                     break;
             }
 
-            if (cbGrab.SelectedIndex == 8)
+            if (cbGrab.SelectedIndex == 9)
             {
                 treeGrabbed.EndUpdate();
                 btnGrab.Enabled = false;
@@ -262,11 +313,37 @@ namespace Grimoire.UI
                     break;
 
                 case 1:
-                    Grabber.GrabQuestIds(treeGrabbed, order);
+                    treeGrabbed.EndUpdate();
+                    btnGrab.Enabled = false;
+                    Cursor = Cursors.WaitCursor;
+                    try
+                    {
+                        treeGrabbed.BeginUpdate();
+                        await Grabber.GrabQuestIds(treeGrabbed, order);
+                    }
+                    finally
+                    {
+                        treeGrabbed.EndUpdate();
+                        btnGrab.Enabled = true;
+                        Cursor = Cursors.Default;
+                    }
                     break;
 
                 case 2:
-                    Grabber.GrabQuests(treeGrabbed, order);
+                    treeGrabbed.EndUpdate();
+                    btnGrab.Enabled = false;
+                    Cursor = Cursors.WaitCursor;
+                    try
+                    {
+                        treeGrabbed.BeginUpdate();
+                        await Grabber.GrabQuests(treeGrabbed, order);
+                    }
+                    finally
+                    {
+                        treeGrabbed.EndUpdate();
+                        btnGrab.Enabled = true;
+                        Cursor = Cursors.Default;
+                    }
                     break;
 
                 case 3:
@@ -286,6 +363,22 @@ namespace Grimoire.UI
                     break;
                 case 7:
                     Grabber.GrabAllMonsters(treeGrabbed);
+                    break;
+                case 8:
+                    treeGrabbed.EndUpdate();
+                    btnGrab.Enabled = false;
+                    Cursor = Cursors.WaitCursor;
+                    try
+                    {
+                        treeGrabbed.BeginUpdate();
+                        await Grabber.GrabQuestsFromFile(treeGrabbed);
+                    }
+                    finally
+                    {
+                        treeGrabbed.EndUpdate();
+                        btnGrab.Enabled = true;
+                        Cursor = Cursors.Default;
+                    }
                     break;
             }
             treeGrabbed.EndUpdate();
@@ -431,6 +524,7 @@ namespace Grimoire.UI
 			"Bank items",
 			"Monsters",
 			"All Monsters",
+			"All Quests (JSON)",
 			"GetMap Item IDs"});
 			this.cbGrab.Location = new System.Drawing.Point(12, 306);
 			this.cbGrab.Name = "cbGrab";
@@ -593,7 +687,7 @@ namespace Grimoire.UI
             cbOrderBy.Enabled = enableGrabOn.Any(filter => boxValue.IndexOf(filter,StringComparison.OrdinalIgnoreCase) >= 0); 
             //cbGrab.SelectedIndex == 1 || cbGrab.SelectedIndex == 2 || cbGrab.SelectedIndex == 6;
         }
-        string[] enableGrabOn = {"Monster","Quest","GetMap"};
+        string[] enableGrabOn = {"Monster","Quest","GetMap","JSON"};
 
         private void btnForceAccept_Click(object sender, EventArgs e)
         {

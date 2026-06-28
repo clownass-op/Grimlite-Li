@@ -27,7 +27,9 @@ namespace Grimoire.Tools
         }
         private static readonly string CachePath = Path.Combine(Application.StartupPath, "cache");
         private static readonly string SavedCacheFilePath = Path.Combine(CachePath, "0SavedMaps.json");
+        private static readonly string SavedQuestCacheFilePath = Path.Combine(CachePath, "0SavedMapQuests.json");
         private static Dictionary<string, List<MapItem>> _savedMapItems = LoadSavedMapItems() ?? new Dictionary<string, List<MapItem>>();
+        private static Dictionary<string, HashSet<int>> _savedMapQuestIds = LoadSavedMapQuestIds() ?? new Dictionary<string, HashSet<int>>();
 
         public static List<MapItem> FindMapItems(bool forceRefresh = false)
         {
@@ -215,6 +217,7 @@ namespace Grimoire.Tools
         private static List<MapItem> ParseMapSwfData(string mapFilePath, string fileName)
         {
             List<MapItem> items = new List<MapItem>();
+            HashSet<int> mapQuestIds = new HashSet<int>();
             Stopwatch sw = Stopwatch.StartNew();
 
             try
@@ -225,7 +228,7 @@ namespace Grimoire.Tools
 
                 // Search ALL .as files in the scripts folder
                 string[] asFiles = Directory.GetFiles(scriptsPath, "*.as", SearchOption.AllDirectories);
-                
+
                 // Regex for extracting IDs from common patterns
                 Regex getMapItemRegex = new Regex(@"(?i)getmapitem\s*\(\s*(\d+)", RegexOptions.Compiled);
                 Regex questProgressRegex = new Regex(@"(?i)isquestinprogress\s*\(\s*(\d+)", RegexOptions.Compiled);
@@ -241,9 +244,33 @@ namespace Grimoire.Tools
                     for (int i = 0; i < lines.Length; i++)
                     {
                         string line = lines[i];
+
+                        // Collect every quest id referenced anywhere in the SWF so we can
+                        // surface quests that don't have a map item attached.
+                        foreach (Match qm in questProgressRegex.Matches(line))
+                        {
+                            if (int.TryParse(qm.Groups[1].Value, out int qid) && qid > 0)
+                                mapQuestIds.Add(qid);
+                        }
+                        foreach (Match qm in questStatusRegex.Matches(line))
+                        {
+                            if (int.TryParse(qm.Groups[1].Value, out int qid) && qid > 0)
+                                mapQuestIds.Add(qid);
+                        }
+                        foreach (Match qm in questNumRegex.Matches(line))
+                        {
+                            if (int.TryParse(qm.Groups[1].Value, out int qid) && qid > 0)
+                                mapQuestIds.Add(qid);
+                        }
+                        foreach (Match qm in intQuestRegex.Matches(line))
+                        {
+                            if (int.TryParse(qm.Groups[1].Value, out int qid) && qid > 0)
+                                mapQuestIds.Add(qid);
+                        }
+
                         Match mapItemMatch = getMapItemRegex.Match(line);
                         bool isAssignment = false;
-                        
+
                         if (!mapItemMatch.Success)
                         {
                             mapItemMatch = mapItemAssignRegex.Match(line);
@@ -289,8 +316,40 @@ namespace Grimoire.Tools
             }
 
             sw.Stop();
-            LogForm.Instance?.devDebug($"[MapItemFinder] Parsing took {sw.Elapsed.TotalSeconds:0.00}s, found {items.Count} item(s).");
+            LogForm.Instance?.devDebug($"[MapItemFinder] Parsing took {sw.Elapsed.TotalSeconds:0.00}s, found {items.Count} item(s), {mapQuestIds.Count} quest(s).");
+
+            // Stash the discovered quest ids on the cache entry so Grabber can read them later.
+            if (mapQuestIds.Count > 0)
+            {
+                _mapQuestIdsByFile[fileName] = mapQuestIds;
+                _savedMapQuestIds[fileName] = new HashSet<int>(mapQuestIds);
+                SaveMapQuestInfo();
+            }
+            else
+            {
+                _mapQuestIdsByFile.Remove(fileName);
+            }
+
             return items.OrderBy(item => item.Id).ToList();
+        }
+
+        private static readonly Dictionary<string, HashSet<int>> _mapQuestIdsByFile = new Dictionary<string, HashSet<int>>();
+
+        public static HashSet<int> GetMapQuestIds(string fileName)
+        {
+            if (string.IsNullOrEmpty(fileName))
+                return new HashSet<int>();
+
+            // Prefer the in-memory cache populated by a fresh scan, but fall back
+            // to the persisted cache so completed quests still show up after a
+            // restart or when the map items were loaded from disk.
+            if (_mapQuestIdsByFile.TryGetValue(fileName, out HashSet<int> ids))
+                return new HashSet<int>(ids);
+
+            if (_savedMapQuestIds.TryGetValue(fileName, out HashSet<int> saved))
+                return new HashSet<int>(saved);
+
+            return new HashSet<int>();
         }
 
         private static void AddMapItem(List<MapItem> items, int mapItemId, int questId, string mapFilePath)
@@ -313,6 +372,18 @@ namespace Grimoire.Tools
             File.WriteAllText(SavedCacheFilePath, JsonConvert.SerializeObject(_savedMapItems, Formatting.Indented));
         }
 
+        private static void SaveMapQuestInfo()
+        {
+            try
+            {
+                File.WriteAllText(SavedQuestCacheFilePath, JsonConvert.SerializeObject(_savedMapQuestIds, Formatting.Indented));
+            }
+            catch (Exception ex)
+            {
+                LogForm.Instance?.devDebug($"[MapItemFinder] Failed to save quest cache: {ex.Message}");
+            }
+        }
+
         private static Dictionary<string, List<MapItem>> LoadSavedMapItems()
         {
             if (!File.Exists(SavedCacheFilePath))
@@ -321,6 +392,28 @@ namespace Grimoire.Tools
             try
             {
                 return JsonConvert.DeserializeObject<Dictionary<string, List<MapItem>>>(File.ReadAllText(SavedCacheFilePath));
+            }
+            catch
+            {
+                return null;
+            }
+        }
+
+        private static Dictionary<string, HashSet<int>> LoadSavedMapQuestIds()
+        {
+            if (!File.Exists(SavedQuestCacheFilePath))
+                return null;
+
+            try
+            {
+                // HashSet<int> serializes as a JSON array; convert each list back to a HashSet.
+                Dictionary<string, List<int>> raw = JsonConvert.DeserializeObject<Dictionary<string, List<int>>>(File.ReadAllText(SavedQuestCacheFilePath));
+                if (raw == null)
+                    return null;
+                Dictionary<string, HashSet<int>> result = new Dictionary<string, HashSet<int>>();
+                foreach (KeyValuePair<string, List<int>> kvp in raw)
+                    result[kvp.Key] = new HashSet<int>(kvp.Value);
+                return result;
             }
             catch
             {

@@ -5812,7 +5812,8 @@ namespace Grimoire.UI
             "Quests",
             "Drops",
             "Boosts",
-            "Items"});
+            "Items",
+            "All Quests"});
             this.cbLists.Location = new System.Drawing.Point(1, 51);
             this.cbLists.Name = "cbLists";
             this.cbLists.Size = new System.Drawing.Size(116, 21);
@@ -6257,5 +6258,11 @@ namespace Grimoire.UI
 		private DarkGroupBox grpSkillsSpecificSkillSet;
 		private DarkTextBox txtSkillsSkillSet;
 		private DarkButton btnSkillsAddSkillSet;
+		// All Quests (Skua-style quest cache) controls
+		public ListBox lstAllQuests;
+		private DarkButton btnUpdateQuests;
+		private DarkButton btnLoadQuests;
+		private DarkButton btnImportQuests;
+		private DarkLabel lblQuestStatus;
     }
 }

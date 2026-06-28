@@ -394,6 +394,7 @@
     <Compile Include="Grimoire\Game\Data\AccountPresenceData.cs" />
     <Compile Include="Grimoire\Game\Data\Bank.cs" />
     <Compile Include="Grimoire\Game\Data\BankItem.cs" />
+    <Compile Include="Grimoire\Game\Data\ClientFileSources.cs" />
     <Compile Include="Grimoire\Game\Data\CompletedQuest.cs" />
     <Compile Include="Grimoire\Game\Data\Faction.cs" />
     <Compile Include="Grimoire\Game\Data\House.cs" />
@@ -403,6 +404,8 @@
     <Compile Include="Grimoire\Game\Data\ItemBase.cs" />
     <Compile Include="Grimoire\Game\Data\Monster.cs" />
     <Compile Include="Grimoire\Game\Data\Quest.cs" />
+    <Compile Include="Grimoire\Game\Data\QuestDataLoaderService.cs" />
+    <Compile Include="Grimoire\Game\Data\QuestSaveData.cs" />
     <Compile Include="Grimoire\Game\Data\QuestInfo.cs" />
     <Compile Include="Grimoire\Game\Data\QuestReward.cs" />
     <Compile Include="Grimoire\Game\Data\Quests.cs" />
@@ -411,6 +414,7 @@
     <Compile Include="Grimoire\Game\Data\ShopInfo.cs" />
     <Compile Include="Grimoire\Game\Data\Skill.cs" />
     <Compile Include="Grimoire\Game\Data\SkillSetData.cs" />
+    <Compile Include="Grimoire\Game\Data\ExternalQuestData.cs" />
     <Compile Include="Grimoire\Game\Data\TempInventory.cs" />
     <Compile Include="Grimoire\Game\Data\TempItem.cs" />
     <Compile Include="Grimoire\Game\DropStack.cs" />

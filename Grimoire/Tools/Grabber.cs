@@ -1,10 +1,13 @@
 using Grimoire.Game;
 using Grimoire.Game.Data;
 using Grimoire.UI;
+using HtmlAgilityPack;
 using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Text.RegularExpressions;
+using System.Threading.Tasks;
 using System.Windows.Forms;
 using Grimoire.Botting;
 //using BrowserForm = Grimoire.UI.BrowserForm;
@@ -15,6 +18,22 @@ namespace Grimoire.Tools
 {
     public static class Grabber
     {
+        private static readonly HashSet<TreeNode> _loadedNodes = new HashSet<TreeNode>();
+        private static List<Quest> _cachedQuests = null;
+        private static OrderBy _cachedQuestOrder = OrderBy.Id;
+        private static List<TreeNode> _cachedQuestNodes = null;
+        private static OrderBy _cachedQuestNodeOrder = OrderBy.Id;
+
+        private static HtmlAgilityPack.HtmlNode GetNextElementSibling(HtmlAgilityPack.HtmlNode node)
+        {
+            var sibling = node.NextSibling;
+            while (sibling != null && sibling.NodeType != HtmlAgilityPack.HtmlNodeType.Element)
+            {
+                sibling = sibling.NextSibling;
+            }
+            return sibling;
+        }
+
         public enum OrderBy
         {
             Name,
@@ -59,7 +78,7 @@ namespace Grimoire.Tools
             return listItem;
         }
 
-        public static void GrabQuests(TreeView tree, OrderBy orderBy)
+        public static async Task GrabQuests(TreeView tree, OrderBy orderBy)
         {
             List<Quest> list = Player.Quests.QuestTree?.OrderBy((Quest q) => q.Name).ToList();
             switch (orderBy)
@@ -74,54 +93,77 @@ namespace Grimoire.Tools
 
             if (list != null && list.Count > 0)
             {
-                foreach (Quest item in list)
+                // Save quests to questdata.json first
+                QuestDataLoaderService loader = new QuestDataLoaderService();
+                int addedCount = await loader.AppendMissingQuestsAsync(list);
+                UI.LogForm.Instance?.AppendDebug($"[GrabQuests] Added {addedCount} new quests to questdata.json");
+                
+                // Clear both caches so next load from file uses fresh data
+                _cachedQuests = null;
+                _cachedQuestNodes = null;
+
+                // Create all nodes first on a background thread to keep the UI responsive
+                List<TreeNode> questNodes = await Task.Run(() =>
                 {
-                    TreeNode treeNode = tree.Nodes.Add($"{item.Id} - {item.Name}");
-                    treeNode.Nodes.Add($"ID: {item.Id}");
-                    if (item.ISlot > 0) treeNode.Nodes.Add($"iSlot: {item.ISlot}");
-                    if (item.IValue > 0) treeNode.Nodes.Add($"iValue: {item.IValue}");
-                    treeNode.Nodes.Add($"Description: {item.Description}");
-                    treeNode.ContextMenuStrip = MenuQuest(item.Id);
-                    //List<InventoryItem> requiredItems = new List<InventoryItem>();
-                    List<InventoryItem> requiredItems = item.RequiredItems;
-                    if (requiredItems != null && requiredItems.Count > 0)
+                    var nodes = new List<TreeNode>();
+                    foreach (Quest item in list)
                     {
-                        TreeNode treeNode2 = treeNode.Nodes.Add("Required items");
-                        treeNode2.ContextMenuStrip = MenuItems(requiredItems);
-                        foreach (InventoryItem req in requiredItems)
+                        TreeNode treeNode = new TreeNode($"{item.Id} - {item.Name}");
+                        treeNode.Nodes.Add($"ID: {item.Id}");
+                        if (item.ISlot > 0) treeNode.Nodes.Add($"iSlot: {item.ISlot}");
+                        if (item.IValue > 0) treeNode.Nodes.Add($"iValue: {item.IValue}");
+                        treeNode.Nodes.Add($"Description: {item.Description}");
+                        treeNode.ContextMenuStrip = MenuQuest(item.Id);
+                        List<InventoryItem> requiredItems = item.RequiredItems;
+                        if (requiredItems != null && requiredItems.Count > 0)
                         {
-                            TreeNode treeNode3 = treeNode2.Nodes.Add(req.Name);
-                            treeNode3.ContextMenuStrip = MenuItem(req);
-                            AddQuestRequirementIdNodes(treeNode3, req);
-                            treeNode3.Nodes.Add($"Quantity: {req.Quantity}");
-                            treeNode3.Nodes.Add("Temporary: " + (req.IsTemporary ? "Yes" : "No"));
-                            treeNode3.Nodes.Add($"Description: {req.Description}");
-                        }
-                    }
-                    List<InventoryItem> rewards = item.Rewards;
-                    if (rewards != null && rewards.Count > 0)
-                    {
-                        TreeNode treeNode4 = treeNode.Nodes.Add("Rewards");
-                        treeNode4.ContextMenuStrip = MenuItems(item.Rewards);
-                        foreach (InventoryItem reward in item.Rewards)
-                        {
-                            TreeNode treeNode5 = treeNode4.Nodes.Add(reward.Name);
-                            treeNode5.ContextMenuStrip = MenuItem(reward);
-                            treeNode5.Nodes.Add($"ID: {reward.Id}");
-                            treeNode5.Nodes.Add($"Quantity: {reward.Quantity}");
-                            treeNode5.Nodes.Add(string.Concat($"Drop chance: ", reward.DropChance.Contains("100") ? "Guaranteed" : reward.DropChance + "%"));
-                            ItemBase reward2 = item.oRewards.Find(x => x.Name == reward.Name);
-                            treeNode5.Nodes.Add($"Category: {reward2.Category}");
-                            treeNode5.Nodes.Add($"Description: {reward2.Description}");
-                            if (!string.IsNullOrEmpty(reward2.File))
+                            TreeNode treeNode2 = treeNode.Nodes.Add("Required items");
+                            treeNode2.ContextMenuStrip = MenuItems(requiredItems);
+                            foreach (InventoryItem req in requiredItems)
                             {
-                                treeNode5.ContextMenuStrip = MenuItem(reward2);
-                                treeNode5.Nodes.Add($"sFile: {reward2.File}");
-                                treeNode5.Nodes.Add($"sLink: {reward2.Link}");
+                                TreeNode treeNode3 = treeNode2.Nodes.Add(req.Name);
+                                treeNode3.ContextMenuStrip = MenuItem(req);
+                                AddQuestRequirementIdNodes(treeNode3, req);
+                                treeNode3.Nodes.Add($"Quantity: {req.Quantity}");
+                                treeNode3.Nodes.Add("Temporary: " + (req.IsTemporary ? "Yes" : "No"));
+                                treeNode3.Nodes.Add($"Description: {req.Description}");
                             }
                         }
+                        List<InventoryItem> rewards = item.Rewards;
+                        if (rewards != null && rewards.Count > 0)
+                        {
+                            TreeNode treeNode4 = treeNode.Nodes.Add("Rewards");
+                            treeNode4.ContextMenuStrip = MenuItems(item.Rewards);
+                            foreach (InventoryItem reward in item.Rewards)
+                            {
+                                TreeNode treeNode5 = treeNode4.Nodes.Add(reward.Name);
+                                treeNode5.ContextMenuStrip = MenuItem(reward);
+                                treeNode5.Nodes.Add($"ID: {reward.Id}");
+                                treeNode5.Nodes.Add($"Quantity: {reward.Quantity}");
+                                treeNode5.Nodes.Add(string.Concat($"Drop chance: ", reward.DropChance.Contains("100") ? "Guaranteed" : reward.DropChance + "%"));
+                                ItemBase reward2 = item.oRewards?.Find(x => x.Name == reward.Name);
+                                if (reward2 != null)
+                                {
+                                    treeNode5.Nodes.Add($"Category: {reward2.Category}");
+                                    treeNode5.Nodes.Add($"Description: {reward2.Description}");
+                                    if (!string.IsNullOrEmpty(reward2.File))
+                                    {
+                                        treeNode5.ContextMenuStrip = MenuItem(reward2);
+                                        treeNode5.Nodes.Add($"sFile: {reward2.File}");
+                                        treeNode5.Nodes.Add($"sLink: {reward2.Link}");
+                                    }
+                                }
+                            }
+                        }
+
+                        nodes.Add(treeNode);
                     }
-                }
+                    return nodes;
+                });
+
+                tree.BeginUpdate();
+                tree.Nodes.AddRange(questNodes.ToArray());
+                tree.EndUpdate();
             }
         }
 
@@ -173,7 +215,7 @@ namespace Grimoire.Tools
             }
         }
 
-        public static void GrabQuestIds(TreeView tree, OrderBy orderBy)
+        public static async Task GrabQuestIds(TreeView tree, OrderBy orderBy)
         {
             List<Quest> list = Player.Quests.QuestTree?.OrderBy((Quest q) => q.Name).ToList();
             switch (orderBy)
@@ -187,10 +229,30 @@ namespace Grimoire.Tools
             }
             if (list != null && list.Count > 0)
             {
-                foreach (Quest item in list)
+                QuestDataLoaderService loader = new QuestDataLoaderService();
+                int addedCount = await loader.AppendMissingQuestsAsync(list);
+                UI.LogForm.Instance?.AppendDebug($"[GrabQuestIds] Added {addedCount} new quests to questdata.json");
+                
+                // Clear both caches so next load from file uses fresh data
+                _cachedQuests = null;
+                _cachedQuestNodes = null;
+
+                // Create all nodes first on a background thread to keep the UI responsive
+                List<TreeNode> questNodes = await Task.Run(() =>
                 {
-                    tree.Nodes.Add($"{item.Id} - {item.Name}").ContextMenuStrip = MenuQuest(item.Id, item.RequiredItems);
-                }
+                    var nodes = new List<TreeNode>();
+                    foreach (Quest item in list)
+                    {
+                        TreeNode treeNode = new TreeNode($"{item.Id} - {item.Name}");
+                        treeNode.ContextMenuStrip = MenuQuest(item.Id, item.RequiredItems);
+                        nodes.Add(treeNode);
+                    }
+                    return nodes;
+                });
+
+                tree.BeginUpdate();
+                tree.Nodes.AddRange(questNodes.ToArray());
+                tree.EndUpdate();
             }
         }
 
@@ -286,12 +348,9 @@ namespace Grimoire.Tools
                 foreach (Monster item in list)
                 {
                     TreeNode treeNode = tree.Nodes.Add(item.Name);
+                    treeNode.Tag = item.Name;
                     treeNode.ContextMenuStrip = Wiki(item.Name);
-                    treeNode.Nodes.Add($"ID: {item.Id}");
-                    treeNode.Nodes.Add($"MonMapID: {item.MonMapID}");
-                    treeNode.Nodes.Add($"Race: {item.Race}");
-                    treeNode.Nodes.Add($"Level: {item.Level}");
-                    treeNode.Nodes.Add($"Health: {item.Health}/{item.MaxHealth}");
+                    treeNode.Nodes.Add("Loading...");
                 }
             }
         }
@@ -315,14 +374,384 @@ namespace Grimoire.Tools
                 foreach (Monster item in list)
                 {
                     TreeNode treeNode = tree.Nodes.Add($"{item.Name} ({item.cell})");
+                    treeNode.Tag = item.Name;
                     treeNode.ContextMenuStrip = Wiki(item.Name);
-                    treeNode.Nodes.Add($"ID: {item.Id}");
-                    treeNode.Nodes.Add($"MonMapID: {item.MonMapID}");
-                    //treeNode.Nodes.Add($"Cell: {item.cell}");
-                    treeNode.Nodes.Add($"Race: {item.Race}");
-                    treeNode.Nodes.Add($"Level: {item.Level}");
-                    treeNode.Nodes.Add($"Health: {item.Health}/{item.MaxHealth}");
+                    treeNode.Nodes.Add("Loading...");
                 }
+            }
+        }
+
+        internal static async Task Monster_Drops(TreeNode parentNode, string monsterName)
+        {
+            if (_loadedNodes.Contains(parentNode)) return;
+
+            // Find the monster from AvailableMonsters or AllMonsters to get its details
+            Monster monster = World.AvailableMonsters?.FirstOrDefault(m => m.Name == monsterName);
+            if (monster == null)
+            {
+                monster = World.GetAllMonsters()?.FirstOrDefault(m => m.Name == monsterName);
+            }
+
+            try
+            {
+                if (parentNode.TreeView != null && parentNode.TreeView.IsHandleCreated)
+                {
+                    parentNode.TreeView.Invoke((MethodInvoker)delegate
+                    {
+                        parentNode.Nodes.Clear();
+
+                        if (monster != null)
+                        {
+                            parentNode.Nodes.Add($"ID: {monster.Id}");
+                            parentNode.Nodes.Add($"MonMapID: {monster.MonMapID}");
+                            parentNode.Nodes.Add($"Race: {monster.Race}");
+                            parentNode.Nodes.Add($"Level: {monster.Level}");
+                            parentNode.Nodes.Add($"Health: {monster.Health}/{monster.MaxHealth}");
+                        }
+
+                        TreeNode dropsNode = parentNode.Nodes.Add("Drops");
+                        dropsNode.Tag = "__drops__:" + monsterName;
+                        dropsNode.Nodes.Add("Click to load...");
+                    });
+                }
+
+                _loadedNodes.Add(parentNode);
+            }
+            catch (Exception ex)
+            {
+                UI.LogForm.Instance.AppendDebug($"[Monster Drops] Error: {ex.Message}");
+                if (parentNode.TreeView != null && parentNode.TreeView.IsHandleCreated && monster != null)
+                {
+                    parentNode.TreeView.Invoke((MethodInvoker)delegate
+                    {
+                        parentNode.Nodes.Clear();
+                        parentNode.Nodes.Add($"ID: {monster.Id}");
+                        parentNode.Nodes.Add($"MonMapID: {monster.MonMapID}");
+                        parentNode.Nodes.Add($"Race: {monster.Race}");
+                        parentNode.Nodes.Add($"Level: {monster.Level}");
+                        parentNode.Nodes.Add($"Health: {monster.Health}/{monster.MaxHealth}");
+                        TreeNode dropsNode = parentNode.Nodes.Add("Drops");
+                        dropsNode.Tag = "__drops__:" + monsterName;
+                        dropsNode.Nodes.Add("Click to load...");
+                    });
+                }
+                _loadedNodes.Add(parentNode);
+            }
+        }
+
+        internal static async Task Monster_Drops_Wiki(TreeNode dropsNode, string monsterName)
+        {
+            if (_loadedNodes.Contains(dropsNode)) return;
+
+            try
+            {
+                string slug = Regex.Replace(monsterName.ToLower(), @"[^a-z0-9\s-]", "");
+                slug = Regex.Replace(slug, @"\s+", "-");
+                slug = Regex.Replace(slug, @"-+", "-");
+                slug = slug.Trim('-');
+                string url = $"https://aqwwiki.wikidot.com/" + slug;
+
+                UI.LogForm.Instance.AppendDebug($"[Monster Drops Wiki] Fetching wiki page for: {monsterName}");
+                UI.LogForm.Instance.AppendDebug($"[Monster Drops Wiki] URL: {url}");
+
+                HtmlWeb web = new HtmlWeb();
+                web.UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+                HtmlAgilityPack.HtmlDocument doc = await web.LoadFromWebAsync(url);
+
+                UI.LogForm.Instance.AppendDebug($"[Monster Drops Wiki] Successfully loaded wiki page");
+
+                // Check if it's a disambiguation page
+                string pageText = doc.DocumentNode.InnerText;
+                if (pageText.Contains("usually refers to") || pageText.Contains("disambiguation"))
+                {
+                    UI.LogForm.Instance.AppendDebug($"[Monster Drops Wiki] Detected disambiguation page");
+                    var links = doc.DocumentNode.SelectNodes("//div[contains(@class,'page-content')]//a[starts-with(@href,'/')]")
+                                ?? doc.DocumentNode.SelectNodes("//a[starts-with(@href,'/')]");
+
+                    if (links != null)
+                    {
+                        foreach (var link in links)
+                        {
+                            string href = link.GetAttributeValue("href", "");
+                            string linkText = link.InnerText.Trim();
+                            if (href.Contains("system:") || href.Contains("search:") || href.Contains("/tag/")) continue;
+                            if (linkText.StartsWith(monsterName, StringComparison.OrdinalIgnoreCase))
+                            {
+                                var candidate = await web.LoadFromWebAsync("https://aqwwiki.wikidot.com" + href);
+                                if (candidate.DocumentNode.InnerText.Contains("Items Dropped:"))
+                                {
+                                    UI.LogForm.Instance.AppendDebug($"[Monster Drops Wiki] Disambig: using https://aqwwiki.wikidot.com{href}");
+                                    doc = candidate;
+                                    break;
+                                }
+                            }
+                        }
+                    }
+                }
+
+                var dropsData = new Dictionary<string, List<Tuple<string, string>>>();
+                var pageContentNode = doc.DocumentNode.SelectSingleNode("//div[contains(@class,'page-content')]")
+                                   ?? doc.DocumentNode.SelectSingleNode("//div[@id='page-content']")
+                                   ?? doc.DocumentNode.SelectSingleNode("//body");
+
+                if (pageContentNode != null)
+                {
+                    foreach (var sectionText in new[] { "Temporary Items Dropped:", "Items Dropped:" })
+                    {
+                        UI.LogForm.Instance.AppendDebug($"[Monster Drops Wiki] Looking for section: {sectionText}");
+                        var sectionNodes = pageContentNode.SelectNodes(
+                            $".//*[normalize-space(text())='{sectionText}' or normalize-space(.)='{sectionText}']");
+                        if (sectionNodes == null || sectionNodes.Count == 0) continue;
+
+                        UI.LogForm.Instance.AppendDebug($"[Monster Drops Wiki] Found section: {sectionText}");
+
+                        var searchStart = sectionNodes[0];
+                        while (searchStart.ParentNode != null &&
+                               searchStart.ParentNode.Name != "div" &&
+                               searchStart.ParentNode.Name != "body")
+                            searchStart = searchStart.ParentNode;
+
+                        var nextUl = GetNextElementSibling(searchStart);
+                        int attempts = 0;
+                        while (nextUl != null && nextUl.Name != "ul" && attempts++ < 5)
+                        {
+                            UI.LogForm.Instance.AppendDebug($"[Monster Drops Wiki] Next element: {nextUl.Name}");
+                            nextUl = GetNextElementSibling(nextUl);
+                        }
+
+                        if (nextUl?.Name != "ul") continue;
+
+                        var listItems = nextUl.SelectNodes(".//li");
+                        if (listItems != null && listItems.Count > 0)
+                        {
+                            var items = new List<Tuple<string, string>>();
+                            foreach (var li in listItems)
+                            {
+                                string itemText = li.InnerText.Trim();
+                                if (itemText.Contains("Search") || itemText.Contains("▼")) continue;
+
+                                string itemName = itemText, note = null;
+                                var m = Regex.Match(itemText, @"(.*?)\s+\(Dropped during the '(.*?)' quest\)");
+                                if (m.Success) { itemName = m.Groups[1].Value.Trim(); note = $"Dropped during the '{m.Groups[2].Value}' quest"; }
+
+                                UI.LogForm.Instance.AppendDebug($"[Monster Drops Wiki] Found item: {itemName}");
+                                items.Add(Tuple.Create(itemName, note));
+                            }
+
+                            if (items.Count > 0)
+                                dropsData[sectionText.Replace(":", "")] = items;
+                        }
+                    }
+
+                    if (dropsData.Count == 0)
+                    {
+                        UI.LogForm.Instance.AppendDebug($"[Monster Drops Wiki] No drops found with current method, trying alternative approach...");
+                        var allUlNodes = pageContentNode.SelectNodes(".//ul");
+                        if (allUlNodes != null)
+                        {
+                            foreach (var ulNode in allUlNodes)
+                            {
+                                var listItems = ulNode.SelectNodes(".//li");
+                                if (listItems != null && listItems.Count > 0)
+                                {
+                                    var items = new List<Tuple<string, string>>();
+                                    foreach (var li in listItems)
+                                    {
+                                        string itemText = li.InnerText.Trim();
+                                        if (itemText.Contains("Search") || itemText.Contains("▼") || itemText.Contains("Tag"))
+                                            continue;
+
+                                        string itemName = itemText;
+                                        string note = null;
+
+                                        var match = Regex.Match(itemText, @"(.*?)\s+\(Dropped during the '(.*?)' quest\)");
+                                        if (match.Success)
+                                        {
+                                            itemName = match.Groups[1].Value.Trim();
+                                            note = $"Dropped during the '{match.Groups[2].Value}' quest";
+                                        }
+
+                                        items.Add(Tuple.Create(itemName, note));
+                                    }
+
+                                    if (items.Any(i => i.Item1.Contains(":") && Regex.IsMatch(i.Item1, @"\d+-\d+")))
+                                        continue;
+
+                                    if (items.Count > 0)
+                                    {
+                                        UI.LogForm.Instance.AppendDebug($"[Monster Drops Wiki] Found {items.Count} items in alternative list");
+                                        dropsData["Drops"] = items;
+                                        break;
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+
+                if (dropsNode.TreeView != null && dropsNode.TreeView.IsHandleCreated)
+                {
+                    dropsNode.TreeView.Invoke((MethodInvoker)delegate
+                    {
+                        dropsNode.Nodes.Clear();
+
+                        if (dropsData.Count == 0)
+                        {
+                            dropsNode.Nodes.Add("No drops found");
+                        }
+                        else
+                        {
+                            foreach (var kvp in dropsData)
+                            {
+                                TreeNode sectionNode = dropsNode.Nodes.Add(kvp.Key);
+                                foreach (var item in kvp.Value)
+                                {
+                                    TreeNode itemNode = sectionNode.Nodes.Add(item.Item1);
+                                    itemNode.ContextMenuStrip = Wiki(item.Item1);
+                                    if (!string.IsNullOrEmpty(item.Item2))
+                                        itemNode.Nodes.Add(item.Item2);
+                                }
+                            }
+                        }
+                    });
+                }
+
+                _loadedNodes.Add(dropsNode);
+            }
+            catch (Exception ex)
+            {
+                UI.LogForm.Instance.AppendDebug($"[Monster Drops Wiki] Error: {ex.Message}");
+                UI.LogForm.Instance.AppendDebug($"[Monster Drops Wiki] Stack trace: {ex.StackTrace}");
+                if (dropsNode.TreeView != null && dropsNode.TreeView.IsHandleCreated)
+                {
+                    dropsNode.TreeView.Invoke((MethodInvoker)delegate
+                    {
+                        dropsNode.Nodes.Clear();
+                        dropsNode.Nodes.Add("Failed to load drops");
+                    });
+                }
+                _loadedNodes.Add(dropsNode);
+            }
+        }
+
+        public static async Task GrabQuestsFromFile(TreeView tree)
+        {
+            try
+            {
+                // First check if we have cached tree nodes with the same order - instant load!
+                if (_cachedQuestNodes != null && _cachedQuestNodeOrder == Loaders.order)
+                {
+                    tree.BeginUpdate();
+                    tree.Nodes.AddRange(_cachedQuestNodes.ToArray());
+                    tree.EndUpdate();
+                    return;
+                }
+
+                // Load and cache quests from file if not already cached or order changed
+                if (_cachedQuests == null || _cachedQuestOrder != Loaders.order)
+                {
+                    QuestDataLoaderService loader = new QuestDataLoaderService();
+                    List<Quest> quests = await loader.GetFromFileAsync(null);
+
+                    if (quests == null || quests.Count == 0)
+                    {
+                        MessageBox.Show(
+                            "No quests found in questdata.json.",
+                            "All Quests (JSON)",
+                            MessageBoxButtons.OK,
+                            MessageBoxIcon.Information);
+                        return;
+                    }
+
+                    // Cache the ordered quests
+                    _cachedQuests = Loaders.order == OrderBy.Id
+                        ? quests.OrderBy(q => q.Id).ToList()
+                        : quests.OrderBy(q => q.Name).ToList();
+                    _cachedQuestOrder = Loaders.order;
+                }
+
+                List<Quest> orderedQuests = _cachedQuests;
+
+                // Create all nodes first on a background thread to keep the UI responsive
+                List<TreeNode> questNodes = await Task.Run(() =>
+                {
+                    var nodes = new List<TreeNode>();
+                    foreach (Quest item in orderedQuests)
+                    {
+                        TreeNode treeNode = new TreeNode($"{item.Id} - {item.Name}");
+                        treeNode.Nodes.Add($"ID: {item.Id}");
+                        if (item.ISlot > 0) treeNode.Nodes.Add($"iSlot: {item.ISlot}");
+                        if (item.IValue > 0) treeNode.Nodes.Add($"iValue: {item.IValue}");
+                        treeNode.Nodes.Add($"Description: {item.Description}");
+                        treeNode.ContextMenuStrip = MenuQuest(item.Id);
+
+                        List<InventoryItem> requiredItems = item.RequiredItems;
+                        if (requiredItems != null && requiredItems.Count > 0)
+                        {
+                            TreeNode treeNode2 = treeNode.Nodes.Add("Required items");
+                            treeNode2.ContextMenuStrip = MenuItems(requiredItems);
+                            foreach (InventoryItem req in requiredItems)
+                            {
+                                TreeNode treeNode3 = treeNode2.Nodes.Add(req.Name);
+                                treeNode3.ContextMenuStrip = MenuItem(req);
+                                AddQuestRequirementIdNodes(treeNode3, req);
+                                treeNode3.Nodes.Add($"Quantity: {req.Quantity}");
+                                treeNode3.Nodes.Add("Temporary: " + (req.IsTemporary ? "Yes" : "No"));
+                                treeNode3.Nodes.Add($"Description: {req.Description}");
+                            }
+                        }
+
+                        List<InventoryItem> rewards = item.Rewards;
+                        if (rewards != null && rewards.Count > 0)
+                        {
+                            TreeNode treeNode4 = treeNode.Nodes.Add("Rewards");
+                            treeNode4.ContextMenuStrip = MenuItems(item.Rewards);
+                            foreach (InventoryItem reward in item.Rewards)
+                            {
+                                TreeNode treeNode5 = treeNode4.Nodes.Add(reward.Name);
+                                treeNode5.ContextMenuStrip = MenuItem(reward);
+                                treeNode5.Nodes.Add($"ID: {reward.Id}");
+                                treeNode5.Nodes.Add($"Quantity: {reward.Quantity}");
+                                treeNode5.Nodes.Add(string.Concat($"Drop chance: ", reward.DropChance.Contains("100") ? "Guaranteed" : reward.DropChance + "%"));
+
+                                ItemBase reward2 = item.oRewards?.Find(x => x.Name == reward.Name);
+                                if (reward2 != null)
+                                {
+                                    treeNode5.Nodes.Add($"Category: {reward2.Category}");
+                                    treeNode5.Nodes.Add($"Description: {reward2.Description}");
+                                    if (!string.IsNullOrEmpty(reward2.File))
+                                    {
+                                        treeNode5.ContextMenuStrip = MenuItem(reward2);
+                                        treeNode5.Nodes.Add($"sFile: {reward2.File}");
+                                        treeNode5.Nodes.Add($"sLink: {reward2.Link}");
+                                    }
+                                }
+                            }
+                        }
+
+                        nodes.Add(treeNode);
+                    }
+                    return nodes;
+                });
+
+                // Cache the generated tree nodes
+                _cachedQuestNodes = questNodes;
+                _cachedQuestNodeOrder = Loaders.order;
+
+                // Add all nodes to the TreeView at once
+                tree.BeginUpdate();
+                tree.Nodes.AddRange(questNodes.ToArray());
+                tree.EndUpdate();
+            }
+            catch (Exception ex)
+            {
+                MessageBox.Show(
+                    $"Failed to load quests from file: {ex.Message}",
+                    "Error",
+                    MessageBoxButtons.OK,
+                    MessageBoxIcon.Error);
+                UI.LogForm.Instance?.AppendDebug($"[GrabQuestsFromFile] Error: {ex.Message}");
+                UI.LogForm.Instance?.AppendDebug($"[GrabQuestsFromFile] Stack trace: {ex.StackTrace}");
             }
         }
 

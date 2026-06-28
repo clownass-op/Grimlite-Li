@@ -176,29 +176,31 @@ namespace Grimoire.Game.Data
 			set;
 		}
 
+		[JsonIgnore]
 		public string ItemId
 		{
 			get;
 			set;
 		}
+		[JsonIgnore]
 		public bool CompleteInBlank
 		{
 			get;
 			set;
 		}
-
+		[JsonIgnore]
 		public bool SafeRelogin
 		{
 			get;
 			set;
 		}
-
+		[JsonIgnore]
 		public string Text
 		{
 			get;
 			set;
 		}
-
+		[JsonIgnore]
 		public bool IsInProgress
 		{
 			get
@@ -209,7 +211,7 @@ namespace Grimoire.Game.Data
 				});
 			}
 		}
-
+		[JsonIgnore]
 		public bool CanComplete
 		{
 			get
@@ -291,25 +293,25 @@ namespace Grimoire.Game.Data
 
 		public bool ShouldSerializeLevel() => false;
 
-		public bool ShouldSerializeGoldReward => false;
+		public bool ShouldSerializeGoldReward() => false;
 
-		public bool ShouldSerializeRequiredClassPoints => false;
+		public bool ShouldSerializeRequiredClassPoints() => false;
 
-		public bool ShouldSerializeIsNotRepeatable => false;
+		public bool ShouldSerializeIsNotRepeatable() => false;
 
-		public bool ShouldSerializeExperienceReward => false;
+		public bool ShouldSerializeExperienceReward() => false;
 
-		public bool ShouldSerializeRewards => false;
+		public bool ShouldSerializeRewards() => false;
 
-		public bool ShouldSerializeName => false;
+		public bool ShouldSerializeName() => false;
 
-		public bool ShouldSerializeIsMemberOnly => false;
+		public bool ShouldSerializeIsMemberOnly() => false;
 
-		public bool ShouldSerializeFactionId => false;
+		public bool ShouldSerializeFactionId() => false;
 
-		public bool ShouldSerializeIsInProgress => false;
+		public bool ShouldSerializeIsInProgress() => false;
 
-		public bool ShouldSerializeCanComplete => false;
+		public bool ShouldSerializeCanComplete() => false;
 		#endregion
 	}
 }
