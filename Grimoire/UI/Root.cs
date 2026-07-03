@@ -582,6 +582,7 @@ namespace Grimoire.UI
 
                 return;
             }
+            //Hook.EoLHook.Hook();
             Flash.flash?.Dispose();
             Flash.SwfLoadProgress -= OnLoadProgress;
             Flash.SwfLoadProgress += OnLoadProgress;
@@ -611,6 +612,7 @@ namespace Grimoire.UI
             }
 
             Flash.flash = flashPlayer;
+            //Hook.EoLHook.Unhook();
         }
 
         private void OnLoadProgress(int progress)
