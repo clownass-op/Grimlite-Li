@@ -83,6 +83,8 @@ namespace Grimoire.Game
                 if (!IsLoggedIn)
                     return "";
                 string usr = Flash.Call<string>("GetUsername", new string[0]);
+                if (!string.IsNullOrEmpty(usr))
+                    usr = usr.Trim().Trim('"').Trim();
                 if (usr == "null" && usernamecheck)
                 {
                     MessageBox.Show(
@@ -481,6 +483,7 @@ namespace Grimoire.Game
         private static readonly Dictionary<int, int> _recentMapItemByItemId = new Dictionary<int, int>();
         private static readonly Dictionary<string, int> _recentMapItemByName = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
         private static readonly Queue<int> _pendingMapItemRequests = new Queue<int>();
+        private static readonly Dictionary<int, int> _mapItemQuestIds = new Dictionary<int, int>();
 
         public static void RegisterMapItem(int mapItemId, InventoryItem item)
         {
@@ -499,9 +502,25 @@ namespace Grimoire.Game
                 if (!string.IsNullOrWhiteSpace(item.Name))
                     _recentMapItemByName[item.Name] = mapItemId;
             }
+
+            if (item.QuestRequirementId.HasValue && item.QuestRequirementId.Value > 0)
+            {
+                lock (_mapItemQuestIds)
+                {
+                    _mapItemQuestIds[mapItemId] = item.QuestRequirementId.Value;
+                }
+            }
         }
 
-        public static void QueueMapItemRequest(int mapItemId)
+        public static bool TryGetMapItemQuestId(int mapItemId, out int questId)
+        {
+            lock (_mapItemQuestIds)
+            {
+                return _mapItemQuestIds.TryGetValue(mapItemId, out questId);
+            }
+        }
+
+        public static void QueueMapItemRequest(int mapItemId, int questId = 0)
         {
             if (mapItemId <= 0)
                 return;
@@ -509,6 +528,8 @@ namespace Grimoire.Game
             lock (recentMapItem)
             {
                 _pendingMapItemRequests.Enqueue(mapItemId);
+                if (questId > 0)
+                    _mapItemQuestIds[mapItemId] = questId;
                 while (_pendingMapItemRequests.Count > 50)
                     _pendingMapItemRequests.Dequeue();
             }

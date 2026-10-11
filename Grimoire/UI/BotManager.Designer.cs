@@ -6018,7 +6018,7 @@ namespace Grimoire.UI
             // 
             // BotManager
             // 
-            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.None;
+            this.AutoScaleMode = System.Windows.Forms.AutoScaleMode.Dpi;
             this.AutoSizeMode = System.Windows.Forms.AutoSizeMode.GrowOnly;
             this.FormBorderStyle = System.Windows.Forms.FormBorderStyle.Sizable;
             this.AutoValidate = System.Windows.Forms.AutoValidate.EnablePreventFocusChange;

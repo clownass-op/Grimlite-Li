@@ -12,7 +12,17 @@ namespace Grimoire.Networking.Handlers
                 return;
 
             if (int.TryParse(message.Arguments[5], out int mapItemId) && mapItemId > 0)
-                Player.QueueMapItemRequest(mapItemId);
+            {
+                int questSlot = 0;
+                if (message.Arguments.Length > 4)
+                    int.TryParse(message.Arguments[4], out questSlot);
+
+                // If Arguments[4] contains a valid quest ID (>1000), store it immediately
+                if (questSlot > 1000)
+                    Player.QueueMapItemRequest(mapItemId, questSlot);
+                else
+                    Player.QueueMapItemRequest(mapItemId);
+            }
         }
     }
 }

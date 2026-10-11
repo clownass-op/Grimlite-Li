@@ -81,19 +81,29 @@ namespace Grimoire.Tools
 
             List<MapItem> items = ParseMapSwfData(filePath, fileName);
             
-            // Add dynamically discovered items from server packets
+            // Add dynamically discovered items from server packets,
+            // and update quest IDs on existing items when packet data is available
             if (items != null)
             {
                 lock (Player.recentMapItem)
                 {
                     foreach (var kvp in Player.recentMapItem)
                     {
-                        if (!items.Any(i => i.Id == kvp.Key))
+                        MapItem existing = items.FirstOrDefault(i => i.Id == kvp.Key);
+                        if (existing != null)
                         {
+                            if (existing.QuestId <= 0 && Player.TryGetMapItemQuestId(kvp.Key, out int qid))
+                                existing.QuestId = qid;
+                        }
+                        else
+                        {
+                            int questId = 0;
+                            Player.TryGetMapItemQuestId(kvp.Key, out questId);
+
                             items.Add(new MapItem
                             {
                                 Id = kvp.Key,
-                                QuestId = 0, // Unknown from packet
+                                QuestId = questId,
                                 MapFilePath = filePath,
                                 MapName = Player.Map
                             });
@@ -235,8 +245,14 @@ namespace Grimoire.Tools
                 Regex questStatusRegex = new Regex(@"(?i)getqueststatus\s*\(\s*(\d+)", RegexOptions.Compiled);
                 Regex questNumRegex = new Regex(@"(?i)questnum\s*=\s*(\d+)", RegexOptions.Compiled);
                 Regex intQuestRegex = new Regex(@"(?i)intquest\s*=\s*(\d+)", RegexOptions.Compiled);
+                Regex getQuestValueRegex = new Regex(@"(?i)getquestvalue\s*\(\s*(\d+)", RegexOptions.Compiled);
+                Regex delayedTurninRegex = new Regex(@"(?i)delayedturnin\s*\(\s*(\d+)", RegexOptions.Compiled);
+                Regex questCaseRegex = new Regex(@"(?i)case\s+(\d+)\s*:", RegexOptions.Compiled);
+                Regex strQuestsRegex = new Regex(@"(?i)str(Quests|TurnIns)\s*=\s*""([^""]*)""", RegexOptions.Compiled);
                 Regex mapItemAssignRegex = new Regex(@"(?i)mapitem\s*=\s*(\d+)", RegexOptions.Compiled);
                 Regex itemDropRegex = new Regex(@"(?i)itemdrop\s*=\s*(\d+)", RegexOptions.Compiled);
+                Regex strItemRegex = new Regex(@"(?i)stritem\s*=\s*(\d+)", RegexOptions.Compiled);
+                Regex strNameRegex = new Regex(@"(?i)strName\s*=\s*""([^""]*)""", RegexOptions.Compiled);
 
                 foreach (string file in asFiles)
                 {
@@ -267,6 +283,30 @@ namespace Grimoire.Tools
                             if (int.TryParse(qm.Groups[1].Value, out int qid) && qid > 0)
                                 mapQuestIds.Add(qid);
                         }
+                        foreach (Match qm in getQuestValueRegex.Matches(line))
+                        {
+                            if (int.TryParse(qm.Groups[1].Value, out int qid) && qid > 0)
+                                mapQuestIds.Add(qid);
+                        }
+                        foreach (Match qm in delayedTurninRegex.Matches(line))
+                        {
+                            if (int.TryParse(qm.Groups[1].Value, out int qid) && qid > 0)
+                                mapQuestIds.Add(qid);
+                        }
+                        foreach (Match qm in questCaseRegex.Matches(line))
+                        {
+                            if (int.TryParse(qm.Groups[1].Value, out int qid) && qid > 0)
+                                mapQuestIds.Add(qid);
+                        }
+                        foreach (Match qm in strQuestsRegex.Matches(line))
+                        {
+                            string csv = qm.Groups[2].Value;
+                            foreach (string part in csv.Split(','))
+                            {
+                                if (int.TryParse(part.Trim(), out int qid) && qid > 0)
+                                    mapQuestIds.Add(qid);
+                            }
+                        }
 
                         Match mapItemMatch = getMapItemRegex.Match(line);
                         bool isAssignment = false;
@@ -276,6 +316,8 @@ namespace Grimoire.Tools
                             mapItemMatch = mapItemAssignRegex.Match(line);
                             if (!mapItemMatch.Success)
                                 mapItemMatch = itemDropRegex.Match(line);
+                            if (!mapItemMatch.Success)
+                                mapItemMatch = strItemRegex.Match(line);
                             isAssignment = mapItemMatch.Success;
                         }
 
@@ -283,6 +325,7 @@ namespace Grimoire.Tools
                         {
                             // Found a map item ID! Now look for a Quest ID nearby (up to 20 lines before or after)
                             int questIdValue = 0;
+                            string itemName = null;
                             int start = Math.Max(0, i - 20);
                             int end = Math.Min(lines.Length - 1, i + 20);
 
@@ -301,8 +344,19 @@ namespace Grimoire.Tools
                                 }
                             }
 
+                            // Look for strName nearby
+                            for (int j = start; j <= end; j++)
+                            {
+                                Match nameMatch = strNameRegex.Match(lines[j]);
+                                if (nameMatch.Success)
+                                {
+                                    itemName = nameMatch.Groups[1].Value;
+                                    break;
+                                }
+                            }
+
                             if (mapItemId > 0)
-                                AddMapItem(items, mapItemId, questIdValue, mapFilePath);
+                                AddMapItem(items, mapItemId, questIdValue, mapFilePath, itemName);
                         }
                     }
                 }
@@ -330,6 +384,9 @@ namespace Grimoire.Tools
                 _mapQuestIdsByFile.Remove(fileName);
             }
 
+            // Try to fill missing quest IDs by matching item names against quest requirements
+            CrossReferenceQuestIds(items);
+
             return items.OrderBy(item => item.Id).ToList();
         }
 
@@ -352,7 +409,113 @@ namespace Grimoire.Tools
             return new HashSet<int>();
         }
 
-        private static void AddMapItem(List<MapItem> items, int mapItemId, int questId, string mapFilePath)
+        /// <summary>
+        /// Cross-references map item names against quest requirement data from
+        /// <c>QuestData.json</c> to fill in missing quest IDs.
+        /// </summary>
+        private static void CrossReferenceQuestIds(List<MapItem> items)
+        {
+            string questDataPath = Path.Combine(
+                Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
+                "Grimoire", "QuestData.json");
+
+            if (!File.Exists(questDataPath))
+            {
+                LogForm.Instance?.devDebug($"[MapItemFinder] CrossReferenceQuestIds: QuestData.json NOT FOUND at {questDataPath}");
+                return;
+            }
+
+            List<QuestSaveData> quests;
+            try
+            {
+                string text = File.ReadAllText(questDataPath);
+                quests = JsonConvert.DeserializeObject<List<QuestSaveData>>(text);
+                if (quests == null || quests.Count == 0)
+                {
+                    LogForm.Instance?.devDebug($"[MapItemFinder] CrossReferenceQuestIds: deserialized 0 quests");
+                    return;
+                }
+            }
+            catch (Exception ex)
+            {
+                LogForm.Instance?.devDebug($"[MapItemFinder] CrossReferenceQuestIds: deserialize error: {ex.Message}");
+                return;
+            }
+
+            LogForm.Instance?.devDebug($"[MapItemFinder] CrossReferenceQuestIds: loaded {quests.Count} quests, scanning {items.Count} items");
+
+            foreach (MapItem item in items)
+            {
+                if (item.QuestId > 0)
+                    continue;
+
+                if (string.IsNullOrEmpty(item.Name))
+                    continue;
+
+                foreach (QuestSaveData quest in quests)
+                {
+                    if (quest.RequiredItems == null || quest.RequiredItems.Count == 0)
+                        continue;
+
+                    foreach (InventoryItemSaveData req in quest.RequiredItems)
+                    {
+                        if (string.IsNullOrEmpty(req.Name))
+                            continue;
+
+                        if (NameMatches(item.Name, req.Name))
+                        {
+                            item.QuestId = quest.Id;
+                            LogForm.Instance?.devDebug($"[MapItemFinder]  Item {item.Id} ({item.Name}) → Quest {quest.Id}");
+                            break;
+                        }
+                    }
+
+                    if (item.QuestId > 0)
+                        break;
+                }
+
+                if (item.QuestId == 0)
+                    LogForm.Instance?.devDebug($"[MapItemFinder]  Item {item.Id} ({item.Name}): NO MATCH");
+            }
+        }
+
+        /// <summary>
+        /// Checks if the SWF item name matches a quest requirement name.
+        /// Handles CamelCase, prefixes/suffixes, and word reordering.
+        /// e.g. "Shackle" matches "Rusty Shackle", "TornSilk" matches "Torn Silk".
+        /// </summary>
+        private static bool NameMatches(string swfName, string questName)
+        {
+            if (string.IsNullOrEmpty(swfName) || string.IsNullOrEmpty(questName))
+                return false;
+
+            // Split each name into individual words (handles CamelCase, spaces, punctuation)
+            HashSet<string> swfWords = SplitWords(swfName);
+            HashSet<string> questWords = SplitWords(questName);
+
+            if (swfWords.Count == 0 || questWords.Count == 0)
+                return false;
+
+            // Every SWF word must appear in the quest requirement name
+            return swfWords.All(w => questWords.Contains(w));
+        }
+
+        /// <summary>
+        /// Splits a name into lowercase words, handling CamelCase, spaces, and punctuation.
+        /// e.g. "TornSilk" → {"torn", "silk"}, "Rusty Shackle" → {"rusty", "shackle"}
+        /// </summary>
+        private static HashSet<string> SplitWords(string name)
+        {
+            // Split CamelCase (e.g. "TornSilk" → "Torn Silk")
+            string spaced = System.Text.RegularExpressions.Regex.Replace(name, @"(?<=[a-z])(?=[A-Z])", " ");
+            // Split on spaces and punctuation
+            string[] parts = spaced.Split(new[] { ' ', '_', '-', ',', '.' }, StringSplitOptions.RemoveEmptyEntries);
+            return new HashSet<string>(parts
+                .Select(w => w.Trim().ToLowerInvariant())
+                .Where(w => w.Length > 0));
+        }
+
+        private static void AddMapItem(List<MapItem> items, int mapItemId, int questId, string mapFilePath, string name = null)
         {
             if (items.Any(item => item.Id == mapItemId))
                 return;
@@ -361,6 +524,7 @@ namespace Grimoire.Tools
             {
                 Id = mapItemId,
                 QuestId = questId,
+                Name = name,
                 MapFilePath = mapFilePath,
                 MapName = Player.Map
             });

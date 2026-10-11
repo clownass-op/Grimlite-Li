@@ -170,6 +170,21 @@ namespace Grimoire.Tools
                 req.Append("</invoke>");
                 string result = flash.CallFunction(req.ToString());
                 XElement el = XElement.Parse(result);
+                object rawVal = el == null || el.FirstNode == null ? default : el.FirstNode.ToString();
+                // Loader returns quoted "True"/"False" strings which
+                // Convert.ChangeType(..., bool) chokes on — parse flexibly.
+                if (type == typeof(bool))
+                {
+                    try
+                    {
+                        string s = rawVal?.ToString()?.Trim().Trim('"').Trim() ?? string.Empty;
+                        return (object)(s.Equals("true", StringComparison.OrdinalIgnoreCase) || s == "1");
+                    }
+                    catch
+                    {
+                        return default;
+                    }
+                }
                 return el == null || el.FirstNode == null ? default : Convert.ChangeType(el.FirstNode.ToString(), type);
             }
             catch (Exception e)
@@ -208,12 +223,37 @@ namespace Grimoire.Tools
 
         private static string GetResponse(string request)
         {
+            string raw = string.Empty;
             try
             {
-                return HttpUtility.HtmlDecode(XElement.Parse(Root.Instance.flashPlayer.CallFunction(request)).FirstNode?.ToString() ?? string.Empty);
+                raw = Root.Instance.flashPlayer.CallFunction(request);
             }
             catch
             {
+                return string.Empty;
+            }
+            // Normal path: valid XML response.
+            try
+            {
+                return HttpUtility.HtmlDecode(XElement.Parse(raw).FirstNode?.ToString() ?? string.Empty);
+            }
+            catch
+            {
+                // Fallback: recent game updates added item names/descriptions with raw
+                // '&'/<>' chars that break XML parsing and nuke the whole 200+ item list.
+                // Extract the payload without an XML parser.
+                try
+                {
+                    int s = raw.IndexOf("<string>");
+                    int e = raw.LastIndexOf("</string>");
+                    if (s >= 0 && e > s)
+                        return HttpUtility.HtmlDecode(raw.Substring(s + 8, e - (s + 8)));
+                    s = raw.IndexOf(">");
+                    e = raw.LastIndexOf("<");
+                    if (s >= 0 && e > s)
+                        return HttpUtility.HtmlDecode(raw.Substring(s + 1, e - (s + 1)));
+                }
+                catch { }
                 return string.Empty;
             }
         }
@@ -493,10 +533,52 @@ namespace Grimoire.Tools
                 case "pext":
                     args[0] = ProcessPext((string)args[0]);
                     FlashCall?.Invoke(flash, name, args[0]);
+                    ForwardPextCombat((string)args[0]);
                     break;
             }
 
             //FlashCall?.Invoke(flash, name, args[0]);
+        }
+
+        /// <summary>
+        /// The current game client delivers combat ("ct") traffic via pext
+        /// ExternalInterface calls instead of packetFromServer socket events.
+        /// Re-wrap those payloads as {"b":{"o":...}} and feed them to the
+        /// proxy + FlashCall2 pipeline so IJsonMessageHandler "ct" handlers
+        /// (SpecialAnims, Gramiel/Speaker taunts, ...) and the packet tools
+        /// keep working.
+        /// </summary>
+        private static void ForwardPextCombat(string packet)
+        {
+            try
+            {
+                if (string.IsNullOrEmpty(packet))
+                    return;
+                // Cheap prefilter: only combat packets carry these arrays.
+                if (packet.IndexOf("anims", StringComparison.Ordinal) < 0 &&
+                    packet.IndexOf("sara", StringComparison.Ordinal) < 0)
+                    return;
+
+                JObject root = JObject.Parse(packet);
+                JToken paramsToken = root["params"];
+                if (paramsToken == null)
+                    return;
+                string type = paramsToken["type"]?.ToString();
+                if (!string.Equals(type, "json", StringComparison.OrdinalIgnoreCase))
+                    return;
+                if (!(paramsToken["dataObj"] is JObject dataObj))
+                    return;
+                if (dataObj["cmd"]?.ToString() != "ct")
+                    return;
+
+                string wrapped = "{\"b\":{\"o\":" + dataObj.ToString(Newtonsoft.Json.Formatting.None) + "}}";
+                try { Proxy.Instance.OnServerMessage(wrapped); } catch { }
+                try { FlashCall2?.Invoke("packetFromServer", wrapped); } catch { }
+            }
+            catch
+            {
+                // Never break the flash callback thread.
+            }
         }
 
         private static string ProcessPacketFromClient(string packet)

@@ -146,6 +146,8 @@
     </Reference>
     <Reference Include="System.Net.Http" />
     <Reference Include="System.Windows.Forms.DataVisualization" />
+    <Reference Include="System.Xaml" />
+    <Reference Include="WindowsFormsIntegration" />
     <Reference Include="System.Xml">
       <HintPath>C:\Windows\Microsoft.NET\assembly\GAC_MSIL\System.Xml\v4.0_4.0.0.0__b77a5c561934e089\System.Xml.dll</HintPath>
     </Reference>
@@ -197,6 +199,14 @@
     <Compile Include="Grimoire\Networking\Handlers\MapItemHandler.cs" />
     <Compile Include="Grimoire\Networking\Handlers\Maid\TargetHandler.cs" />
     <Compile Include="Grimoire\Networking\Handlers\Maid\WarningMsgHandler.cs" />
+    <Compile Include="Grimoire\Tools\Wiki\WikiEntry.cs" />
+    <Compile Include="Grimoire\Tools\Wiki\CategoryViewModel.cs" />
+    <Compile Include="Grimoire\Tools\Wiki\DepthToIndentConverter.cs" />
+    <Compile Include="Grimoire\Tools\Wiki\DragAdorner.cs" />
+    <Compile Include="Grimoire\Tools\Wiki\WikiScraper.cs" />
+    <Compile Include="Grimoire\Tools\Wiki\WikiView.xaml.cs">
+      <DependentUpon>WikiView.xaml</DependentUpon>
+    </Compile>
     <Compile Include="Grimoire\Tools\MapConfig.cs" />
     <Compile Include="Grimoire\Game\Data\MapItem.cs" />
     <Compile Include="Grimoire\Tools\MapItemFinder.cs" />
@@ -580,6 +590,9 @@
     <Compile Include="Grimoire\UI\RawCommandEditor.cs">
       <SubType>Form</SubType>
     </Compile>
+    <Compile Include="Grimoire\UI\WikiForm.cs">
+      <SubType>Form</SubType>
+    </Compile>
     <Compile Include="Grimoire\UI\Root.cs">
       <SubType>Form</SubType>
     </Compile>
@@ -713,6 +726,12 @@
     </EmbeddedResource>
   </ItemGroup>
   <ItemGroup>
+    <Page Include="Grimoire\Tools\Wiki\WikiView.xaml">
+      <SubType>Designer</SubType>
+      <Generator>MSBuild:Compile</Generator>
+    </Page>
+  </ItemGroup>
+  <ItemGroup>
     <BootstrapperPackage Include="Microsoft.Net.Framework.3.5.SP1">
       <Visible>False</Visible>
       <ProductName>.NET Framework 3.5 SP1</ProductName>
@@ -777,7 +796,11 @@
       <Link>Skillsets\skillsets.json</Link>
     </None>
   </ItemGroup>
-  <ItemGroup />
+  <ItemGroup>
+    <EmbeddedResource Include="obj\$(Configuration)\Grimoire\Tools\Wiki\WikiView.baml">
+      <LogicalName>grimoire/tools/wiki/wikiview.baml</LogicalName>
+    </EmbeddedResource>
+  </ItemGroup>
   <Import Project="$(MSBuildToolsPath)\Microsoft.CSharp.targets" />
   <PropertyGroup>
     <PostBuildEvent>

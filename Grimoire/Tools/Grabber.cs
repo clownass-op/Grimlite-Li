@@ -773,9 +773,6 @@ namespace Grimoire.Tools
 
             foreach (MapItem item in list)
             {
-                if (item.QuestId <= 0)
-                    continue;
-
                 string questName = "";
                 if (item.QuestId > 0)
                 {
@@ -784,10 +781,16 @@ namespace Grimoire.Tools
                         questName = $" ({q.Name})";
                 }
 
-                TreeNode treeNode = tree.Nodes.Add($"{item.Id} - Quest {item.QuestId}{questName}");
+                string label = item.QuestId > 0
+                    ? $"{item.Id} - Quest {item.QuestId}{questName}"
+                    : $"{item.Id} - (No Quest)";
+
+                TreeNode treeNode = tree.Nodes.Add(label);
                 treeNode.ContextMenuStrip = MenuMapItem(item);
                 treeNode.Nodes.Add($"Map Item ID: {item.Id}");
                 treeNode.Nodes.Add($"Quest ID: {item.QuestId}");
+                if (!string.IsNullOrEmpty(item.Name))
+                    treeNode.Nodes.Add($"Item Name: {item.Name}");
                 if (!string.IsNullOrEmpty(questName))
                     treeNode.Nodes.Add($"Quest Name: {questName.Trim(' ', '(', ')')}");
                 if (!string.IsNullOrWhiteSpace(item.MapName))

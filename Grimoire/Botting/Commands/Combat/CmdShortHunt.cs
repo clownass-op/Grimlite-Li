@@ -272,6 +272,14 @@ namespace Grimoire.Botting.Commands.Combat
                 await join.Execute(instance);
             }
 
+            // If both monster and item are empty, skip hunting entirely and just get map item
+            bool skipHunting = string.IsNullOrEmpty(_Monster) && string.IsNullOrEmpty(_Items);
+            if (skipHunting)
+            {
+                LogForm.Instance.AppendDebug($"[CmdShortHunt] No monster or item specified, skipping hunt");
+            }
+            else
+            {
             // Hunt for each item at its designated cell
             for (int itemIdx = 0; itemIdx < itemNames.Length && instance.IsRunning; itemIdx++)
             {
@@ -381,7 +389,8 @@ namespace Grimoire.Botting.Commands.Combat
                 }
             }
 
-            LogForm.Instance.AppendDebug($"[CmdShortHunt] All hunts complete");
+                LogForm.Instance.AppendDebug($"[CmdShortHunt] All hunts complete");
+            }
 
             // If MapItemId is provided, get map item after hunting
             if (doMapItem)
@@ -408,6 +417,19 @@ namespace Grimoire.Botting.Commands.Combat
                     await instance.WaitUntil(() => Player.CurrentState != Player.State.InCombat, timeout: 5);
                     await Task.Delay(500);
                 }
+
+                // Re-jump to target cell if player was moved by monsters
+                if (!string.IsNullOrEmpty(Cell))
+                {
+                    string targetCell = Cell.Split(',')[0].Trim();
+                    if (Player.Cell != targetCell)
+                    {
+                        LogForm.Instance.AppendDebug($"[CmdShortHunt] Re-jumping to cell {targetCell}");
+                        Player.MoveToCell(targetCell, Pad.Split(',')[0].Trim());
+                        await instance.WaitUntil(() => Player.Cell == targetCell, timeout: 5);
+                        await Task.Delay(500);
+                    }
+                }
                 
                 // Get each map item
                 for (int idx = 0; idx < mapItemIds.Length && instance.IsRunning; idx++)
@@ -426,7 +448,20 @@ namespace Grimoire.Botting.Commands.Combat
                                 await instance.WaitUntil(() => Player.CurrentState != Player.State.InCombat, timeout: 5);
                                 await Task.Delay(500);
                             }
-                            
+
+                            // Re-jump if monsters pushed player away
+                            if (!string.IsNullOrEmpty(Cell))
+                            {
+                                string targetCell = Cell.Split(',')[0].Trim();
+                                if (Player.Cell != targetCell)
+                                {
+                                    LogForm.Instance.AppendDebug($"[CmdShortHunt] Re-jumping to cell {targetCell} for map item pickup");
+                                    Player.MoveToCell(targetCell, Pad.Split(',')[0].Trim());
+                                    await instance.WaitUntil(() => Player.Cell == targetCell, timeout: 5);
+                                    await Task.Delay(500);
+                                }
+                            }
+
                             Player.GetMapItem(mapItemId);
                             await Task.Delay(1500);
                         }
@@ -447,8 +482,16 @@ namespace Grimoire.Botting.Commands.Combat
         {
             string itemType = ItemType == ItemType.Items ? "Items" : "Temps";
             
+            // If MapItemId is set, show map item info with optional quest
+            if (!string.IsNullOrEmpty(MapItemId))
+            {
+                if (int.TryParse(QuestId, out int mapQid) && mapQid != 0)
+                    return $"{mapQid}: Map Item {MapItemId}";
+                return $"Map Item {MapItemId}";
+            }
+            
             // If QuestId is provided, show Quest ID - Hunt itemnames
-            if (!string.IsNullOrEmpty(QuestId) && int.TryParse(QuestId, out int qid) && qid != 0)
+            if (int.TryParse(QuestId, out int qid) && qid != 0)
             {
                 return $"{qid}:Hunt {ItemName}";
             }

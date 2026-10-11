@@ -158,10 +158,14 @@ namespace Grimoire.UI
 					txtLogDebug.Clear();
 				if (txtLogDebug.InvokeRequired)
 				{
-					txtLogDebug.Invoke((Action)delegate
+					try
 					{
-						txtLogDebug.AppendText(text + "\r\n");
-					});
+						txtLogDebug.BeginInvoke((Action)delegate
+						{
+							try { txtLogDebug.AppendText(text + "\r\n"); } catch { }
+						});
+					}
+					catch { }
 				}
 				else
 					txtLogDebug.AppendText(text + "\r\n");
@@ -221,10 +225,14 @@ namespace Grimoire.UI
 					txtLogScript.Clear();
 				if (txtLogScript.InvokeRequired)
 				{
-					txtLogScript.Invoke((Action)delegate
+					try
 					{
-						txtLogScript.AppendText(text + "\r\n");
-					});
+						txtLogScript.BeginInvoke((Action)delegate
+						{
+							try { txtLogScript.AppendText(text + "\r\n"); } catch { }
+						});
+					}
+					catch { }
 				}
 				else
 					txtLogScript.AppendText(text + "\r\n");

@@ -145,6 +145,8 @@ namespace Grimoire.Botting
             IsRunning = true;
             Configuration = config;
             Index = 0;
+            Configuration.Tempvariable.Clear();
+            Configuration.Tempvalues.Clear();
             BotData.BotState = BotData.State.Others;
             _ctsBot = new CancellationTokenSource();
             _questDelayCounter = new Stopwatch();
@@ -176,6 +178,13 @@ namespace Grimoire.Botting
 
         public void Stop()
         {
+            try
+            {
+                string msg = $"[Bot] Stopped at Index {Index} [{lastCommand}]";
+                try { LogForm.Instance.AppendDebug(msg); } catch { }
+                try { LogForm.Instance.AppendScript(msg); } catch { }
+            }
+            catch { }
             _ctsBot?.Cancel(throwOnFirstException: false);
             World.ItemDropped -= OnItemDropped;
             Player.Quests.QuestsLoaded -= OnQuestsLoaded;
@@ -284,7 +293,19 @@ namespace Grimoire.Botting
                     lastCommand = cmd.ToString();
                     while (paused) //Might be useful for handler uses in the future
                         await Task.Delay(100);
-                    await cmd.Execute(this);
+                    try
+                    {
+                        await cmd.Execute(this);
+                    }
+                    catch (Exception ex)
+                    {
+                        try
+                        {
+                            LogForm.Instance.AppendDebug($"[Bot Error] Index {Index} [{lastCommand}]: {ex.Message}");
+                            LogForm.Instance.AppendScript($"[Bot Error] Index {Index} [{lastCommand}]: {ex.Message}");
+                        }
+                        catch { }
+                    }
                 }
 
                 if (_ctsBot.IsCancellationRequested)

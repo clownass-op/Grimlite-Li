@@ -58,6 +58,7 @@ namespace Grimoire.UI
         private ToolStripMenuItem bankToolStripMenuItem;
         private ToolStripMenuItem setsToolStripMenuItem;
         private ToolStripMenuItem eyeDropperToolStripMenuItem;
+        private ToolStripMenuItem wikiToolStripMenuItem;
         private ToolStripMenuItem logsToolStripMenuItem1;
         private ToolStripMenuItem notepadToolStripMenuItem1;
         private ToolStripMenuItem changeServerMenuItem;
@@ -644,6 +645,11 @@ namespace Grimoire.UI
             ShowForm(Hotkeys.Instance);
         }
 
+        private void wikiToolStripMenuItem_Click(object sender, EventArgs e)
+        {
+            ShowForm(WikiForm.Instance);
+        }
+
         private void pluginManagerToolStripMenuItem_Click(object sender, EventArgs e)
         {
             ShowForm(PluginManager.Instance);
@@ -735,6 +741,7 @@ namespace Grimoire.UI
             this.fastTravelsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.loadersgrabbersToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.hotkeysToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
+            this.wikiToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.pluginManagerToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.cosmeticsToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
             this.bankToolStripMenuItem = new System.Windows.Forms.ToolStripMenuItem();
@@ -1056,6 +1063,7 @@ namespace Grimoire.UI
             this.fastTravelsToolStripMenuItem,
             this.loadersgrabbersToolStripMenuItem,
             this.hotkeysToolStripMenuItem,
+            this.wikiToolStripMenuItem,
             this.pluginManagerToolStripMenuItem,
             this.cosmeticsToolStripMenuItem,
             this.bankToolStripMenuItem,
@@ -1099,6 +1107,15 @@ namespace Grimoire.UI
             this.hotkeysToolStripMenuItem.Size = new System.Drawing.Size(187, 22);
             this.hotkeysToolStripMenuItem.Text = "Hotkeys";
             this.hotkeysToolStripMenuItem.Click += new System.EventHandler(this.hotkeysToolStripMenuItem_Click);
+            // 
+            // wikiToolStripMenuItem
+            // 
+            this.wikiToolStripMenuItem.BackColor = System.Drawing.Color.FromArgb(((int)(((byte)(60)))), ((int)(((byte)(63)))), ((int)(((byte)(65)))));
+            this.wikiToolStripMenuItem.ForeColor = System.Drawing.Color.FromArgb(((int)(((byte)(220)))), ((int)(((byte)(220)))), ((int)(((byte)(220)))));
+            this.wikiToolStripMenuItem.Name = "wikiToolStripMenuItem";
+            this.wikiToolStripMenuItem.Size = new System.Drawing.Size(187, 22);
+            this.wikiToolStripMenuItem.Text = "Wiki";
+            this.wikiToolStripMenuItem.Click += new System.EventHandler(this.wikiToolStripMenuItem_Click);
             // 
             // pluginManagerToolStripMenuItem
             // 

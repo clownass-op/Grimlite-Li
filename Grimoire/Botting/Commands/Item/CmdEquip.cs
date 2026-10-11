@@ -24,17 +24,60 @@ namespace Grimoire.Botting.Commands.Item
 		{
 			// Resolve variables first (if ItemName is a variable key).
 			var raw = instance.ResolveVars(ItemName);
+            if (string.IsNullOrEmpty(raw))
+                return;
+
+            // Only forge/enhancement-ID lookups need the full list (slow, often null
+            // on big inventories). Plain names use instant single lookup — no wait,
+            // so stopping the bot can never be what "unblocks" the send.
+            bool needsList = Enum.TryParse<InventoryItem.forgeID>(raw, ignoreCase: true, out var _f)
+                || InventoryItem.EnhancementNames.Any(p => p.Value.Equals(raw, StringComparison.OrdinalIgnoreCase))
+                || int.TryParse(raw, out var _n);
+            if (needsList)
+            {
+                try
+                {
+                    if (Player.Inventory?.Items == null)
+                        await instance.WaitUntil(() =>
+                        {
+                            try { return Player.Inventory != null && Player.Inventory.Items != null; }
+                            catch { return false; }
+                        }, () => instance.IsRunning && Player.IsLoggedIn, timeout: 15, interval: 1000);
+                }
+                catch { }
+            }
+
+            System.Collections.Generic.List<InventoryItem> items = null;
+            try { items = Player.Inventory?.Items; } catch { items = null; }
+            if (items == null)
+            {
+                // Fallback: single-item Flash lookup (small response, works when full list fails).
+                try
+                {
+                    var single = Player.Inventory?.GetItemByName(raw);
+                    if (single != null && single.IsEquippable)
+                    {
+                        items = new System.Collections.Generic.List<InventoryItem> { single };
+                        try { Grimoire.UI.LogForm.Instance.AppendDebug($"[Equip] List null, single-lookup OK: {ItemName}->{raw} (id:{single.Id})"); } catch { }
+                    }
+                    else
+                    {
+                        try { Grimoire.UI.LogForm.Instance.AppendDebug($"[Equip] Inventory null, skip {ItemName}->{raw}"); } catch { }
+                        return;
+                    }
+                }
+                catch { return; }
+            }
+
             InventoryItem item = null;
 
             // 1) Forge enhancement by enum name (Valiance, Dauntless, Praxis, etc.)
             if (Enum.TryParse<InventoryItem.forgeID>(raw, ignoreCase: true, out var forge))
             {
-                item = Player.Inventory.Items.FirstOrDefault(i => i.ForgeEnhancement == forge && i.IsEquippable);
+                item = items.FirstOrDefault(i => i.ForgeEnhancement == forge && i.IsEquippable);
             }
 
-            // 2) Enhancement *display name* (Luck Awe Blast, Luck Health Vamp, etc.).
-            //    If the string matches one of our known enhancement names, look up its ID
-            //    and equip the first item that has that enhancement.
+            // 2) Enhancement display name (Luck Awe Blast, etc.)
             if (item == null)
             {
                 var kvp = InventoryItem.EnhancementNames
@@ -42,115 +85,97 @@ namespace Grimoire.Botting.Commands.Item
                 if (!kvp.Equals(default(System.Collections.Generic.KeyValuePair<int, string>)))
                 {
                     int enhIdByName = kvp.Key;
-                    item = Player.Inventory.Items
-                        .FirstOrDefault(i => i.Enhancement == enhIdByName && i.IsEquippable);
+                    item = items.FirstOrDefault(i => i.Enhancement == enhIdByName && i.IsEquippable);
                 }
             }
 
-            // 3) Raw enhancement ID (for non-Forge enchants).
-            //    If the string is a number, treat it as the enhancement ID and equip the first
-            //    equippable item that has that enhancement.
+            // 3) Raw enhancement ID
             if (item == null && int.TryParse(raw, out int enhId))
             {
-                item = Player.Inventory.Items.FirstOrDefault(i => i.Enhancement == enhId && i.IsEquippable);
+                item = items.FirstOrDefault(i => i.Enhancement == enhId && i.IsEquippable);
             }
 
             // 4) Fallback: normal item name match.
             if (item == null)
             {
-                item = Player.Inventory.Items.FirstOrDefault(i =>
+                item = items.FirstOrDefault(i =>
                     i.IsEquippable && i.Name.Equals(raw, StringComparison.OrdinalIgnoreCase));
             }
 
+            // Last resort: single-item lookup when list is a 1-item fallback or list missed it.
+            if (item == null)
+            {
+                try
+                {
+                    var single = Player.Inventory?.GetItemByName(raw);
+                    if (single != null && single.IsEquippable)
+                        item = single;
+                }
+                catch { }
+            }
+
 			if (item == null)
-				return;
+            {
+                try { Grimoire.UI.LogForm.Instance.AppendDebug($"[Equip] Not found: {raw} (inv:{items.Count})"); } catch { }
+                return;
+            }
 
-			// If item is already equipped, skip
-			if (IsEquipped(item))
-				return;
-
-			// Item is not equipped, so apply Safe logic if enabled
-			if (Safe)
+			// Fire-and-forget like the SWF/Aethra path: resolve, send once, move on.
+			// No verify loop — verification is what hangs when the list bridge is null.
+			using (new pauseProvoke(instance.Configuration))
 			{
-				while (instance.IsRunning && Player.CurrentState == Player.State.InCombat)
+				// Potions/scrolls are used IN combat — don't combat-wait for them.
+				if (Safe && item.Category != "Item")
 				{
-					Player.MoveToCell(Player.Cell, Player.Pad);
-					await Task.Delay(1000);
+					BotData.BotState = BotData.State.Transaction;
+					try { Grimoire.UI.LogForm.Instance.AppendDebug($"[Equip] Safe check: combat={Player.CurrentState} lock={World.IsActionAvailable(LockActions.EquipItem)}"); } catch { }
+					int combatWait = 0;
+					while (instance.IsRunning && Player.CurrentState == Player.State.InCombat && combatWait < 15)
+					{
+						Player.MoveToCell(Player.Cell, Player.Pad);
+						await Task.Delay(1000);
+						combatWait++;
+					}
+					await instance.WaitUntil(() => World.IsActionAvailable(LockActions.EquipItem));
 				}
 
-				await instance.WaitUntil(() => World.IsActionAvailable(LockActions.EquipItem));
+				if (item.Category == "Item")
+					Player.EquipPotion(item.Id, item.Description, item.File, item.Name);
+				else
+					Player.Equip(item.Id);
+
+				try { Grimoire.UI.LogForm.Instance.AppendDebug($"[Equip] Sent: {ItemName}->{raw} (id:{item.Id} cat:{item.Category})"); } catch { }
+				await Task.Delay(500);
 			}
-
-			int equipAttempts = 0;
-			int maxAttempts = 100; // 50 seconds max (100 * 500ms)
-			while (instance.IsRunning && !IsEquipped(item) && equipAttempts < maxAttempts)
-			{
-				equipAttempts++;
-				
-				bool shouldBreak = false;
-				using (new pauseProvoke(instance.Configuration))
-				{
-					if (item.Category == "Item")
-					{
-						Player.EquipPotion(item.Id, item.Description, item.File, item.Name);
-					}
-					else
-					{
-						Player.Equip(item.Id);
-						shouldBreak = true; // Exit loop immediately - assume equipment was successful
-					}
-					
-					await Task.Delay(500);
-				}
-				
-				if (shouldBreak)
-					break;
-			}
-
-
 		}
 
-		public bool IsEquipped(InventoryItem item)
+		private bool IsEquippedNow(InventoryItem item)
 		{
-			// Classes are tracked separately - check against EquippedClass
-			if (item.Category == "Class")
+			try
 			{
-				return Player.EquippedClass.Equals(item.Name, StringComparison.OrdinalIgnoreCase);
-			}
-
-			// For weapons, armor, helm, and cape: Try the Flash property first, fallback to inventory search
-			if (InventoryItem.Weapons.Contains(item.Category) || item.Category == "Armor" || item.Category == "Helm" || item.Category == "Cape")
-			{
-				string equipped = null;
-				
-				// Try to get equipped item from Flash property (new approach)
-				if (InventoryItem.Weapons.Contains(item.Category))
-					equipped = Player.EquippedWeapon ?? "";
-				else if (item.Category == "Armor")
-					equipped = Player.EquippedArmor ?? "";
-				else if (item.Category == "Helm")
-					equipped = Player.EquippedHelm ?? "";
-				else if (item.Category == "Cape")
-					equipped = Player.EquippedCape ?? "";
-				
-				// If Flash property has a value, use it
-				if (!string.IsNullOrEmpty(equipped))
-				{
-					return equipped.Equals(item.Name, StringComparison.OrdinalIgnoreCase);
-				}
-				
-				// Fallback: Check if item was recently equipped by checking if it's now marked as equipped in inventory
-				// This might work if the game updates the IsEquipped flag after equipping
-				var inventoryItem = Player.Inventory.Items.FirstOrDefault(it => it.Id == item.Id);
-				if (inventoryItem != null && inventoryItem.IsEquipped)
+				var it = Player.Inventory?.Items?.FirstOrDefault(i => i.IsEquipped && i.Id == item.Id);
+				if (it != null)
 					return true;
-				
-				return false;
 			}
+			catch { }
+			// Fallback when full list is null: single-item lookup works.
+			try
+			{
+				var s = Player.Inventory?.GetItemByName(item.Name);
+				if (s != null && s.IsEquipped && s.Id == item.Id)
+					return true;
+			}
+			catch { }
+			return false;
+		}
 
-			// For other items (potions, etc.), check the IsEquipped flag in inventory
-			var equippedItem = Player.Inventory.Items.FirstOrDefault((InventoryItem it) => it.IsEquipped && it.Id == item.Id);
-			return equippedItem != null;
+		public bool IsEquipped(int ItemID)
+		{
+			try
+			{
+				return Player.Inventory?.Items?.FirstOrDefault((InventoryItem it) => it.IsEquipped && it.Id == ItemID) != null;
+			}
+			catch { return false; }
 		}
 
 		public override string ToString()

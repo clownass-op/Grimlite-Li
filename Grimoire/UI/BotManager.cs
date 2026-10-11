@@ -2839,12 +2839,18 @@ namespace Grimoire.UI
                     Region second = DrawString(e.Graphics, toDraw[0] + ": ", font, white, region, GetCurrentBoolCentered(scmd) ? centered : StringFormat.GenericDefault);
                     region = new RectangleF(region.X + second.GetBounds(e.Graphics).Width + 3, region.Y, region.Width, region.Height);
                     
-                    // Split "Hunt" from the rest
+                    // Split "Hunt" or "Map Item" from the rest
                     if (toDraw[1].StartsWith("Hunt "))
                     {
                         Region third = DrawString(e.Graphics, "Hunt ", font, green, region, GetCurrentBoolCentered(scmd) ? centered : StringFormat.GenericDefault);
                         region = new RectangleF(region.X + third.GetBounds(e.Graphics).Width + 3, region.Y, region.Width, region.Height);
                         DrawString(e.Graphics, toDraw[1].Substring(5), font, varColor, region, GetCurrentBoolCentered(scmd) ? centered : StringFormat.GenericDefault);
+                    }
+                    else if (toDraw[1].StartsWith("Map Item "))
+                    {
+                        Region third = DrawString(e.Graphics, "Map Item ", font, green, region, GetCurrentBoolCentered(scmd) ? centered : StringFormat.GenericDefault);
+                        region = new RectangleF(region.X + third.GetBounds(e.Graphics).Width + 3, region.Y, region.Width, region.Height);
+                        DrawString(e.Graphics, toDraw[1].Substring(9), font, varColor, region, GetCurrentBoolCentered(scmd) ? centered : StringFormat.GenericDefault);
                     }
                     else
                         DrawString(e.Graphics, toDraw[1], font, varColor, region, GetCurrentBoolCentered(scmd) ? centered : StringFormat.GenericDefault);

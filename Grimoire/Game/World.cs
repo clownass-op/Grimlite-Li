@@ -129,7 +129,25 @@ namespace Grimoire.Game
             }
         }
 
-        public static bool IsActionAvailable(LockActions action) => Flash.Call<bool>("IsActionAvailable", LockedActions[action]);
+        // Loader returns quoted "True"/"False" (Root.TrueString) which
+        // Convert.ChangeType(..., bool) chokes on — parse as string instead.
+        // Without this, every lock looks permanently held and every WaitUntil
+        // on it stalls to timeout (feels frozen; stopping releases it).
+        public static bool IsActionAvailable(LockActions action)
+        {
+            try
+            {
+                string s = Flash.Call<string>("IsActionAvailable", LockedActions[action]);
+                if (s == null)
+                    return false;
+                s = s.Trim().Trim('"').Trim();
+                return s.Equals("true", System.StringComparison.OrdinalIgnoreCase);
+            }
+            catch
+            {
+                return false;
+            }
+        }
 
         public static void SetSpawnPoint() => Flash.Call("SetSpawnPoint", new string[0]);
 
