@@ -27,28 +27,32 @@ namespace Grimoire.Botting.Commands.Item
             if (string.IsNullOrEmpty(raw))
                 return;
 
-            // Only forge/enhancement-ID lookups need the full list (slow, often null
-            // on big inventories). Plain names use instant single lookup — no wait,
-            // so stopping the bot can never be what "unblocks" the send.
+            // Forge/enhancement-ID lookups need the full list (the single-name
+            // bridge can never match an enhancement). The tolerant loader
+            // below retries on its own -- no strict-list wait here, the strict
+            // parse never succeeds on big inventories and waiting on it burned ~15s per equip.
             bool needsList = Enum.TryParse<InventoryItem.forgeID>(raw, ignoreCase: true, out var _f)
                 || InventoryItem.EnhancementNames.Any(p => p.Value.Equals(raw, StringComparison.OrdinalIgnoreCase))
                 || int.TryParse(raw, out var _n);
-            if (needsList)
-            {
-                try
-                {
-                    if (Player.Inventory?.Items == null)
-                        await instance.WaitUntil(() =>
-                        {
-                            try { return Player.Inventory != null && Player.Inventory.Items != null; }
-                            catch { return false; }
-                        }, () => instance.IsRunning && Player.IsLoggedIn, timeout: 15, interval: 1000);
-                }
-                catch { }
-            }
 
             System.Collections.Generic.List<InventoryItem> items = null;
-            try { items = Player.Inventory?.Items; } catch { items = null; }
+            var inv = Player.Inventory;
+            if (needsList && inv != null)
+            {
+                // Forge-enhancement lookups (Arcana, Valiance, ...) can only
+                // be resolved by scanning the full list — the single-name
+                // bridge can never match an enhancement. Load tolerantly so
+                // one corrupt entry doesn't nuke the whole inventory.
+                try { items = await inv.LoadItemsTolerantAsync(3, 500); } catch { items = null; }
+                if (items == null)
+                {
+                    try { items = inv.Items; } catch { items = null; }
+                }
+            }
+            else
+            {
+                try { items = inv?.Items; } catch { items = null; }
+            }
             if (items == null)
             {
                 // Fallback: single-item Flash lookup (small response, works when full list fails).
@@ -62,7 +66,14 @@ namespace Grimoire.Botting.Commands.Item
                     }
                     else
                     {
-                        try { Grimoire.UI.LogForm.Instance.AppendDebug($"[Equip] Inventory null, skip {ItemName}->{raw}"); } catch { }
+                        try
+                        {
+                            if (needsList)
+                                Grimoire.UI.LogForm.Instance.AppendDebug($"[Equip] '{raw}' is a forge enhancement and needs the full inventory list, but the list is unreadable (null) — equip the weapon by its exact item name instead. Skip {ItemName}->{raw}");
+                            else
+                                Grimoire.UI.LogForm.Instance.AppendDebug($"[Equip] Inventory null, skip {ItemName}->{raw}");
+                        }
+                        catch { }
                         return;
                     }
                 }
@@ -144,8 +155,18 @@ namespace Grimoire.Botting.Commands.Item
 				else
 					Player.Equip(item.Id);
 
-				try { Grimoire.UI.LogForm.Instance.AppendDebug($"[Equip] Sent: {ItemName}->{raw} (id:{item.Id} cat:{item.Category})"); } catch { }
+				try { Grimoire.UI.LogForm.Instance.AppendDebug($"[Equip] Sent: {ItemName}->{raw} (id:{item.Id} name:'{item.Name}' cat:{item.Category})"); } catch { }
+				Grimoire.Game.Data.Inventory.InvalidateTolerantCache();
 				await Task.Delay(500);
+				// Verify the send actually landed (distinguishes "check is
+				// blind" from "equip was rejected").
+				try
+				{
+					var verify = Player.Inventory?.GetItemByName(item.Name);
+					bool landed = verify != null && verify.IsEquipped;
+					try { Grimoire.UI.LogForm.Instance.AppendDebug(landed ? $"[Equip] Verified equipped: '{item.Name}'" : $"[Equip] STILL NOT equipped after send: '{item.Name}' (bEquip={verify?.IsEquipped})"); } catch { }
+				}
+				catch { }
 			}
 		}
 

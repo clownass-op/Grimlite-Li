@@ -1,6 +1,7 @@
 ﻿using Grimoire.Game;
 using Grimoire.Game.Data;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -23,11 +24,27 @@ namespace Grimoire.Botting.Commands.Misc.Statements
                 return Task.FromResult<object>(null);
             }
 
+            // Full-list bridge often returns null on big inventories — fall
+            // back to tolerant per-item parsing (sync-safe: the loader never
+            // captures the UI context) so enhancement lookups keep working.
+            List<InventoryItem> items = null;
+            var inv = Player.Inventory;
+            try { items = inv?.Items; } catch { items = null; }
+            if (items == null && inv != null)
+            {
+                try { items = inv.LoadItemsTolerantAsync(2, 400).GetAwaiter().GetResult(); } catch { items = null; }
+            }
+            if (items == null)
+            {
+                instance.Index++;
+                return Task.FromResult<object>(null);
+            }
+
             InventoryItem item = null;
 
             if (Enum.TryParse<InventoryItem.forgeID>(raw, ignoreCase: true, out var forge))
             {
-                item = Player.Inventory.Items.FirstOrDefault(i => i.ForgeEnhancement == forge && i.IsEquippable);
+                item = items.FirstOrDefault(i => i.ForgeEnhancement == forge && i.IsEquippable);
             }
 
             if (item == null)
@@ -37,19 +54,19 @@ namespace Grimoire.Botting.Commands.Misc.Statements
                 if (!kvp.Equals(default(System.Collections.Generic.KeyValuePair<int, string>)))
                 {
                     int enhIdByName = kvp.Key;
-                    item = Player.Inventory.Items
+                    item = items
                         .FirstOrDefault(i => i.Enhancement == enhIdByName && i.IsEquippable);
                 }
             }
 
             if (item == null && int.TryParse(raw, out int enhId))
             {
-                item = Player.Inventory.Items.FirstOrDefault(i => i.Enhancement == enhId && i.IsEquippable);
+                item = items.FirstOrDefault(i => i.Enhancement == enhId && i.IsEquippable);
             }
 
             if (item == null)
             {
-                item = Player.Inventory.Items.FirstOrDefault(i =>
+                item = items.FirstOrDefault(i =>
                     i.IsEquippable && i.Name.Equals(raw, StringComparison.OrdinalIgnoreCase));
             }
 
@@ -75,7 +92,7 @@ namespace Grimoire.Botting.Commands.Misc.Statements
                 // Fallback to inventory check if Flash property is empty
                 if (!isEquipped && item.Id > 0)
                 {
-                    var invItem = Player.Inventory.Items.FirstOrDefault(it => it.Id == item.Id && it.IsEquipped);
+                    var invItem = items.FirstOrDefault(it => it.Id == item.Id && it.IsEquipped);
                     isEquipped = invItem != null;
                 }
             }
@@ -86,7 +103,7 @@ namespace Grimoire.Botting.Commands.Misc.Statements
                 
                 if (!isEquipped && item.Id > 0)
                 {
-                    var invItem = Player.Inventory.Items.FirstOrDefault(it => it.Id == item.Id && it.IsEquipped);
+                    var invItem = items.FirstOrDefault(it => it.Id == item.Id && it.IsEquipped);
                     isEquipped = invItem != null;
                 }
             }
@@ -97,7 +114,7 @@ namespace Grimoire.Botting.Commands.Misc.Statements
                 
                 if (!isEquipped && item.Id > 0)
                 {
-                    var invItem = Player.Inventory.Items.FirstOrDefault(it => it.Id == item.Id && it.IsEquipped);
+                    var invItem = items.FirstOrDefault(it => it.Id == item.Id && it.IsEquipped);
                     isEquipped = invItem != null;
                 }
             }
@@ -108,7 +125,7 @@ namespace Grimoire.Botting.Commands.Misc.Statements
                 
                 if (!isEquipped && item.Id > 0)
                 {
-                    var invItem = Player.Inventory.Items.FirstOrDefault(it => it.Id == item.Id && it.IsEquipped);
+                    var invItem = items.FirstOrDefault(it => it.Id == item.Id && it.IsEquipped);
                     isEquipped = invItem != null;
                 }
             }

@@ -75,5 +75,14 @@ namespace Grimoire.Game.Data
         {
             Flash.Call("GetBank", new string[0]);
         }
+
+        /// <summary>
+        /// Tolerant full-list fetch (see Inventory): per-item parsing so one
+        /// corrupt entry can't nuke the whole bank list.
+        /// </summary>
+        public async Task<List<InventoryItem>> LoadItemsTolerantAsync(int attempts = 3, int delayMs = 500)
+        {
+            return await Inventory.LoadListTolerantAsync("GetBankItems", attempts, delayMs).ConfigureAwait(false);
+        }
     }
 }

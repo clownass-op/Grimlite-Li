@@ -1,6 +1,7 @@
 ﻿using Grimoire.Game;
 using Grimoire.Game.Data;
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Threading.Tasks;
 
@@ -24,12 +25,25 @@ namespace Grimoire.Botting.Commands.Misc.Statements
             if (string.IsNullOrEmpty(raw))
                 return Task.FromResult<object>(null);
 
+            // Full-list bridge often returns null on big inventories — fall
+            // back to tolerant per-item parsing (sync-safe: the loader never
+            // captures the UI context) so enhancement lookups keep working.
+            List<InventoryItem> items = null;
+            var inv = Player.Inventory;
+            try { items = inv?.Items; } catch { items = null; }
+            if (items == null && inv != null)
+            {
+                try { items = inv.LoadItemsTolerantAsync(2, 400).GetAwaiter().GetResult(); } catch { items = null; }
+            }
+            if (items == null)
+                return Task.FromResult<object>(null);
+
             InventoryItem item = null;
 
             // 1) Forge enhancement by enum name (Valiance, Dauntless, Praxis, Lament, etc.)
             if (Enum.TryParse<InventoryItem.forgeID>(raw, ignoreCase: true, out var forge))
             {
-                item = Player.Inventory.Items.FirstOrDefault(i => i.ForgeEnhancement == forge && i.IsEquippable);
+                item = items.FirstOrDefault(i => i.ForgeEnhancement == forge && i.IsEquippable);
             }
 
             // 2) Enhancement display name (Luck Awe Blast, etc.)
@@ -40,7 +54,7 @@ namespace Grimoire.Botting.Commands.Misc.Statements
                 if (!kvp.Equals(default(System.Collections.Generic.KeyValuePair<int, string>)))
                 {
                     int enhIdByName = kvp.Key;
-                    item = Player.Inventory.Items
+                    item = items
                         .FirstOrDefault(i => i.Enhancement == enhIdByName && i.IsEquippable);
                 }
             }
@@ -48,13 +62,13 @@ namespace Grimoire.Botting.Commands.Misc.Statements
             // 3) Raw enhancement ID
             if (item == null && int.TryParse(raw, out int enhId))
             {
-                item = Player.Inventory.Items.FirstOrDefault(i => i.Enhancement == enhId && i.IsEquippable);
+                item = items.FirstOrDefault(i => i.Enhancement == enhId && i.IsEquippable);
             }
 
             // 4) Fallback: normal item name match (also resolves [Vars] via ResolveVars above)
             if (item == null)
             {
-                item = Player.Inventory.Items.FirstOrDefault(i =>
+                item = items.FirstOrDefault(i =>
                     i.IsEquippable && i.Name.Equals(raw, StringComparison.OrdinalIgnoreCase));
             }
 
@@ -78,7 +92,7 @@ namespace Grimoire.Botting.Commands.Misc.Statements
                 // Fallback to inventory check if Flash property is empty
                 if (!isEquipped && item.Id > 0)
                 {
-                    var invItem = Player.Inventory.Items.FirstOrDefault(it => it.Id == item.Id && it.IsEquipped);
+                    var invItem = items.FirstOrDefault(it => it.Id == item.Id && it.IsEquipped);
                     isEquipped = invItem != null;
                 }
             }
@@ -90,7 +104,7 @@ namespace Grimoire.Botting.Commands.Misc.Statements
                 
                 if (!isEquipped && item.Id > 0)
                 {
-                    var invItem = Player.Inventory.Items.FirstOrDefault(it => it.Id == item.Id && it.IsEquipped);
+                    var invItem = items.FirstOrDefault(it => it.Id == item.Id && it.IsEquipped);
                     isEquipped = invItem != null;
                 }
             }
@@ -102,7 +116,7 @@ namespace Grimoire.Botting.Commands.Misc.Statements
                 
                 if (!isEquipped && item.Id > 0)
                 {
-                    var invItem = Player.Inventory.Items.FirstOrDefault(it => it.Id == item.Id && it.IsEquipped);
+                    var invItem = items.FirstOrDefault(it => it.Id == item.Id && it.IsEquipped);
                     isEquipped = invItem != null;
                 }
             }
@@ -114,7 +128,7 @@ namespace Grimoire.Botting.Commands.Misc.Statements
                 
                 if (!isEquipped && item.Id > 0)
                 {
-                    var invItem = Player.Inventory.Items.FirstOrDefault(it => it.Id == item.Id && it.IsEquipped);
+                    var invItem = items.FirstOrDefault(it => it.Id == item.Id && it.IsEquipped);
                     isEquipped = invItem != null;
                 }
             }
@@ -127,6 +141,24 @@ namespace Grimoire.Botting.Commands.Misc.Statements
             if (isEquipped)
             {
                 instance.Index++;
+            }
+            else
+            {
+                // Diagnostic: shows exactly what the check compared, so a
+                // never-passing check (re-equip every cycle) is explainable.
+                try
+                {
+                    string ew = "", ea = "", eh = "", ec = "", cl = "";
+                    try { ew = Player.EquippedWeapon ?? ""; } catch { }
+                    try { ea = Player.EquippedArmor ?? ""; } catch { }
+                    try { eh = Player.EquippedHelm ?? ""; } catch { }
+                    try { ec = Player.EquippedCape ?? ""; } catch { }
+                    try { cl = Player.EquippedClass ?? ""; } catch { }
+                    Grimoire.UI.LogForm.Instance.AppendDebug(
+                        $"[EquipCheck] '{raw}' -> '{item.Name}' (id:{item.Id} cat:{item.Category} bEquip:{item.IsEquipped}) " +
+                        $"vs W:'{ew}' A:'{ea}' H:'{eh}' C:'{ec}' Class:'{cl}' => not equipped, will (re)equip");
+                }
+                catch { }
             }
             return Task.FromResult<object>(null);
             }

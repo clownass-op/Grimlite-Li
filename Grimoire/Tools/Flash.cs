@@ -66,6 +66,23 @@ namespace Grimoire.Tools
         }
 
         /// <summary>
+        /// Raw string response for a Flash call (no deserialization).
+        /// Used for big payloads (e.g. GetInventoryItems) where a single
+        /// corrupt entry must not nuke the whole response.
+        /// </summary>
+        public static string CallRawJson(string function, params string[] args)
+        {
+            try
+            {
+                return GetResponse(BuildRequest(function, args));
+            }
+            catch
+            {
+                return string.Empty;
+            }
+        }
+
+        /// <summary>
         /// Calls the actionscript object with the given name at the given location.
         /// </summary>
         /// <param name="path">The path to the object and its function name.</param>
@@ -533,7 +550,7 @@ namespace Grimoire.Tools
                 case "pext":
                     args[0] = ProcessPext((string)args[0]);
                     FlashCall?.Invoke(flash, name, args[0]);
-                    ForwardPextCombat((string)args[0]);
+                    ForwardPextPackets((string)args[0]);
                     break;
             }
 
@@ -541,22 +558,26 @@ namespace Grimoire.Tools
         }
 
         /// <summary>
-        /// The current game client delivers combat ("ct") traffic via pext
-        /// ExternalInterface calls instead of packetFromServer socket events.
-        /// Re-wrap those payloads as {"b":{"o":...}} and feed them to the
-        /// proxy + FlashCall2 pipeline so IJsonMessageHandler "ct" handlers
-        /// (SpecialAnims, Gramiel/Speaker taunts, ...) and the packet tools
-        /// keep working.
+        /// The current game client delivers combat ("ct") and zone ("event")
+        /// traffic via pext ExternalInterface calls instead of
+        /// packetFromServer socket events. Re-wrap those payloads as
+        /// {"b":{"o":...}} and feed them to the proxy + FlashCall2 pipeline
+        /// so IJsonMessageHandler "ct"/"event" handlers (SpecialAnims,
+        /// Gramiel/Speaker taunts, auto-zone handlers, ...) and the packet
+        /// tools keep working.
         /// </summary>
-        private static void ForwardPextCombat(string packet)
+        private static void ForwardPextPackets(string packet)
         {
             try
             {
                 if (string.IsNullOrEmpty(packet))
                     return;
-                // Cheap prefilter: only combat packets carry these arrays.
+                // Cheap prefilter: only combat / zone / quest / shop packets carry these keys.
                 if (packet.IndexOf("anims", StringComparison.Ordinal) < 0 &&
-                    packet.IndexOf("sara", StringComparison.Ordinal) < 0)
+                    packet.IndexOf("sara", StringComparison.Ordinal) < 0 &&
+                    packet.IndexOf("zoneSet", StringComparison.Ordinal) < 0 &&
+                    packet.IndexOf("quests", StringComparison.Ordinal) < 0 &&
+                    packet.IndexOf("shopinfo", StringComparison.Ordinal) < 0)
                     return;
 
                 JObject root = JObject.Parse(packet);
@@ -568,7 +589,12 @@ namespace Grimoire.Tools
                     return;
                 if (!(paramsToken["dataObj"] is JObject dataObj))
                     return;
-                if (dataObj["cmd"]?.ToString() != "ct")
+                string cmd = dataObj["cmd"]?.ToString();
+                bool isCombat = cmd == "ct";
+                bool isZoneEvent = cmd == "event" && dataObj["args"] != null;
+                bool isQuestList = cmd == "getQuests" && dataObj["quests"] != null;
+                bool isShop = cmd == "loadShop" && dataObj["shopinfo"] != null;
+                if (!isCombat && !isZoneEvent && !isQuestList && !isShop)
                     return;
 
                 string wrapped = "{\"b\":{\"o\":" + dataObj.ToString(Newtonsoft.Json.Formatting.None) + "}}";

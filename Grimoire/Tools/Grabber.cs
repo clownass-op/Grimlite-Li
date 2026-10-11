@@ -268,7 +268,34 @@ namespace Grimoire.Tools
 
         private static void GrabItems(TreeView tree, bool inventory)
         {
-            List<InventoryItem> list = (inventory ? Player.Inventory.Items : Player.Bank.Items)?.OrderBy((InventoryItem i) => i.Name).ToList();
+            List<InventoryItem> list = null;
+            try { list = (inventory ? Player.Inventory.Items : Player.Bank.Items)?.OrderBy((InventoryItem i) => i.Name).ToList(); } catch { list = null; }
+            if (list == null || list.Count == 0)
+            {
+                // Full-list bridge often returns null on big inventories —
+                // retry with per-item tolerant parsing (safe to block: the
+                // loader awaits nothing that needs the UI thread).
+                try
+                {
+                    System.Threading.Tasks.Task<System.Collections.Generic.List<InventoryItem>> task = inventory
+                        ? Player.Inventory.LoadItemsTolerantAsync(3, 500)
+                        : Player.Bank.LoadItemsTolerantAsync(3, 500);
+                    var recovered = task.GetAwaiter().GetResult();
+                    if (recovered != null && recovered.Count > 0)
+                    {
+                        list = recovered.OrderBy((InventoryItem i) => i.Name).ToList();
+                        try { UI.LogForm.Instance.AppendDebug($"[Grabber] Recovered {(inventory ? "inventory" : "bank")} list tolerantly: {list.Count} items"); } catch { }
+                    }
+                    else
+                    {
+                        try { UI.LogForm.Instance.AppendDebug($"[Grabber] {(inventory ? "Inventory" : "Bank")} list unreadable (null even tolerantly) — tree stays empty"); } catch { }
+                    }
+                }
+                catch (System.Exception ex)
+                {
+                    try { UI.LogForm.Instance.AppendDebug($"[Grabber] Tolerant load failed: {ex.Message}"); } catch { }
+                }
+            }
             if (list != null && list.Count > 0)
             {
                 foreach (InventoryItem item in list)
