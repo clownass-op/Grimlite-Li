@@ -136,16 +136,16 @@ namespace Grimoire.Tools.Wiki
         {
             var results = new List<WikiEntry>();
             var seenSlugs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            HtmlWeb web = CreateWebClient();
-
             Logd($"Scraping category list: {categorySlug}");
 
             string firstUrl = $"{BaseUrl}/{categorySlug}";
             HtmlDocument firstDoc;
             try
             {
-                firstDoc = await web.LoadFromWebAsync(firstUrl).ConfigureAwait(false);
-                Logd($"Fetch completed — StatusCode: {web.StatusCode}, ResponseUri: {web.ResponseUri}, NodeCount: {firstDoc.DocumentNode.ChildNodes.Count}");
+                firstDoc = await LoadDocumentWithRetryAsync(firstUrl, $"category '{categorySlug}'").ConfigureAwait(false);
+                if (firstDoc == null)
+                    return results;
+                Logd($"Fetch completed — NodeCount: {firstDoc.DocumentNode.ChildNodes.Count}");
             }
             catch (Exception ex)
             {
@@ -179,20 +179,51 @@ namespace Grimoire.Tools.Wiki
             return results;
         }
 
+        private static async Task<HtmlDocument> LoadDocumentWithRetryAsync(string url, string context)
+        {
+            const int maxAttempts = 4;
+
+            for (int attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+                try
+                {
+                    HtmlWeb web = CreateWebClient();
+                    HtmlDocument doc = await web.LoadFromWebAsync(url).ConfigureAwait(false);
+                    if (doc == null || doc.DocumentNode == null || doc.DocumentNode.ChildNodes.Count == 0)
+                        throw new InvalidOperationException("The server returned an empty document.");
+
+                    if (attempt > 1)
+                        Logd($"Recovered {context} on attempt {attempt}/{maxAttempts}.");
+
+                    return doc;
+                }
+                catch (Exception ex)
+                {
+                    Logd($"Attempt {attempt}/{maxAttempts} failed for {context}: {ex.GetType().Name}: {ex.Message}");
+                    if (attempt == maxAttempts)
+                        break;
+
+                    await Task.Delay(500 * attempt).ConfigureAwait(false);
+                }
+            }
+
+            Logd($"Giving up on {context} after {maxAttempts} attempts: {url}");
+            return null;
+        }
+
         private static async Task<HtmlDocument> FetchPageThrottled(string url, SemaphoreSlim semaphore)
         {
             await semaphore.WaitAsync().ConfigureAwait(false);
             try
             {
-                // HtmlWeb holds request/response state; give each concurrent page request its own instance.
-                HtmlWeb web = CreateWebClient();
-                var doc = await web.LoadFromWebAsync(url).ConfigureAwait(false);
-                Logd($"Fetched page: {url}");
+                HtmlDocument doc = await LoadDocumentWithRetryAsync(url, "category page").ConfigureAwait(false);
+                if (doc != null)
+                    Logd($"Fetched page: {url}");
                 return doc;
             }
             catch (Exception ex)
             {
-                Logd($"Failed to load page '{url}': {ex.Message}");
+                Logd($"Failed to load page '{url}' after retries: {ex.Message}");
                 return null;
             }
             finally
@@ -358,13 +389,15 @@ namespace Grimoire.Tools.Wiki
             {
                 Logd($"Scraping detail: {entry.WikiUrl}");
 
-                HtmlWeb web = CreateWebClient();
-                HtmlDocument doc = await web.LoadFromWebAsync(entry.WikiUrl).ConfigureAwait(false);
+                HtmlDocument doc = await LoadDocumentWithRetryAsync(entry.WikiUrl, $"detail '{entry.Name}'").ConfigureAwait(false);
+
+                if (doc == null)
+                    return entry;
 
                 string pageText = doc.DocumentNode.InnerText;
                 if (pageText.Contains("usually refers to") || pageText.Contains("disambiguation"))
                 {
-                    doc = await ResolveDisambiguationAsync(web, doc, entry.Name).ConfigureAwait(false) ?? doc;
+                    doc = await ResolveDisambiguationAsync(doc, entry.Name).ConfigureAwait(false) ?? doc;
                 }
 
                 var pageContent = FindPageContent(doc, $"detail: {entry.Name}");
@@ -2694,7 +2727,7 @@ namespace Grimoire.Tools.Wiki
             return lines;
         }
 
-        private static async Task<HtmlDocument> ResolveDisambiguationAsync(HtmlWeb web, HtmlDocument doc, string expectedName)
+        private static async Task<HtmlDocument> ResolveDisambiguationAsync(HtmlDocument doc, string expectedName)
         {
             Logd("Detected disambiguation page, resolving...");
 
@@ -2712,7 +2745,7 @@ namespace Grimoire.Tools.Wiki
 
                 try
                 {
-                    var candidate = await web.LoadFromWebAsync($"{BaseUrl}{href}").ConfigureAwait(false);
+                    HtmlDocument candidate = await LoadDocumentWithRetryAsync($"{BaseUrl}{href}", $"disambiguation target '{linkText}'").ConfigureAwait(false);
                     if (candidate.DocumentNode.SelectSingleNode("//div[contains(@class,'page-content')]") != null)
                     {
                         Logd($"Disambiguation resolved to: {BaseUrl}{href}");
