@@ -15,7 +15,6 @@ namespace Grimoire.Botting.Commands.Combat
 		{
 			BotData.BotState = BotData.State.Combat;
 			
-			// Reset skill index at the start of each attack
 			
 			if (instance.Configuration.SkipAttack)
             {
