@@ -42,7 +42,7 @@ namespace Grimoire.Botting.Commands.Combat
             if (UseSkill)
             {
                 if (instance.Configuration.Skills.Count > 0)
-                    UseSkillsSet(instance);
+                    await UseSkillsSet(instance);
                     //Task.Run(() => UseSkillsSet(instance));
             }
 
