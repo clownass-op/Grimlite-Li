@@ -15,8 +15,12 @@ namespace Grimoire.Tools.Wiki
         static WikiScraper()
         {
             // HtmlWeb uses HttpWebRequest; raise the per-host connection cap to match four category loads with up to eight page requests each.
-            ServicePointManager.DefaultConnectionLimit = 32;
+            ServicePointManager.DefaultConnectionLimit = 8;
         }
+
+        // Wikidot can reset connections when too many requests arrive together.
+        private static readonly SemaphoreSlim RequestSemaphore = new SemaphoreSlim(3);
+        private const int RequestSpacingMilliseconds = 350;
 
         public static event Action<string> Log;
         private static void Logd(string msg) => Log?.Invoke(msg);
@@ -185,6 +189,7 @@ namespace Grimoire.Tools.Wiki
 
             for (int attempt = 1; attempt <= maxAttempts; attempt++)
             {
+                await RequestSemaphore.WaitAsync().ConfigureAwait(false);
                 try
                 {
                     HtmlWeb web = CreateWebClient();
@@ -203,7 +208,14 @@ namespace Grimoire.Tools.Wiki
                     if (attempt == maxAttempts)
                         break;
 
-                    await Task.Delay(500 * attempt).ConfigureAwait(false);
+                    int retryDelay = 2000 * (1 << (attempt - 1));
+                    Logd($"Backing off {retryDelay / 1000}s before retrying {context}.");
+                    await Task.Delay(retryDelay).ConfigureAwait(false);
+                }
+                finally
+                {
+                    await Task.Delay(RequestSpacingMilliseconds).ConfigureAwait(false);
+                    RequestSemaphore.Release();
                 }
             }
 
