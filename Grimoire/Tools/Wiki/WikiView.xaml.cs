@@ -168,11 +168,11 @@ namespace Grimoire.Tools.Wiki
 
         private void OnScraperLog(string message)
         {
-            Dispatcher.Invoke(() =>
+            Dispatcher.BeginInvoke(new Action(() =>
             {
                 txtLog.Text += $"[{DateTime.Now:HH:mm:ss}] {message}\n";
                 logScroll.ScrollToEnd();
-            });
+            }));
         }
 
         private async void CategoryHeader_Click(object sender, RoutedEventArgs e)
@@ -491,6 +491,26 @@ namespace Grimoire.Tools.Wiki
             e.Handled = true;
         }
 
+        private static readonly SemaphoreSlim CategoryLoadSemaphore = new SemaphoreSlim(4);
+
+        private async Task<List<WikiEntry>> ScrapeCategorySlugAsync(string slug, WikiEntryType type, string categoryName)
+        {
+            await CategoryLoadSemaphore.WaitAsync();
+            try
+            {
+                return await WikiScraper.ScrapeCategoryListAsync(slug, type);
+            }
+            catch (Exception ex)
+            {
+                OnScraperLog($"FATAL ERROR scraping '{slug}' (part of '{categoryName}'): {ex.Message}");
+                return new List<WikiEntry>();
+            }
+            finally
+            {
+                CategoryLoadSemaphore.Release();
+            }
+        }
+
         private async Task LoadCategoryAsync(CategoryViewModel category)
         {
             category.IsLoading = true;
@@ -498,12 +518,12 @@ namespace Grimoire.Tools.Wiki
             {
                 if (category.Slugs != null && category.Slugs.Count > 0)
                 {
-                    var merged = new List<WikiEntry>();
-                    var seenUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+                    List<string> slugs = new List<string>(category.Slugs);
+                    List<Task<List<WikiEntry>>> tasks = new List<Task<List<WikiEntry>>>(slugs.Count);
 
-                    foreach (var slug in category.Slugs)
+                    foreach (string slug in slugs)
                     {
-                        var child = category.Children.FirstOrDefault(c =>
+                        CategoryViewModel child = category.Children.FirstOrDefault(c =>
                             string.Equals(c.Slug, slug, StringComparison.OrdinalIgnoreCase));
 
                         if (child != null)
@@ -512,25 +532,22 @@ namespace Grimoire.Tools.Wiki
                             child.RaiseCountChanged();
                         }
 
-                        List<WikiEntry> entries;
-                        try
-                        {
-                            entries = await WikiScraper.ScrapeCategoryListAsync(slug, category.Type);
-                        }
-                        catch (Exception ex)
-                        {
-                            OnScraperLog($"FATAL ERROR scraping '{slug}' (part of '{category.Name}'): {ex.Message}");
-                            if (child != null)
-                            {
-                                child.IsLoading = false;
-                                child.RaiseCountChanged();
-                            }
-                            continue;
-                        }
+                        tasks.Add(ScrapeCategorySlugAsync(slug, category.Type, category.Name));
+                    }
+
+                    List<WikiEntry>[] results = await Task.WhenAll(tasks);
+                    List<WikiEntry> merged = new List<WikiEntry>();
+                    HashSet<string> seenUrls = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+
+                    for (int i = 0; i < slugs.Count; i++)
+                    {
+                        List<WikiEntry> entries = results[i];
+                        CategoryViewModel child = category.Children.FirstOrDefault(c =>
+                            string.Equals(c.Slug, slugs[i], StringComparison.OrdinalIgnoreCase));
 
                         if (child != null)
                         {
-                            foreach (var entry in entries)
+                            foreach (WikiEntry entry in entries)
                                 entry.CategoryLabel = child.Name;
 
                             child.AllEntries = entries;
@@ -540,7 +557,7 @@ namespace Grimoire.Tools.Wiki
                             child.RaiseCountChanged();
                         }
 
-                        foreach (var entry in entries)
+                        foreach (WikiEntry entry in entries)
                         {
                             if (entry.WikiUrl != null && !seenUrls.Add(entry.WikiUrl)) continue;
                             merged.Add(entry);
@@ -552,7 +569,7 @@ namespace Grimoire.Tools.Wiki
                 else
                 {
                     category.AllEntries = await WikiScraper.ScrapeCategoryListAsync(category.Slug, category.Type);
-                    foreach (var entry in category.AllEntries)
+                    foreach (WikiEntry entry in category.AllEntries)
                         entry.CategoryLabel = category.Name;
                 }
 
