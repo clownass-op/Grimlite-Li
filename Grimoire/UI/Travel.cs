@@ -17,7 +17,7 @@ namespace Grimoire.UI
 {
     public class Travel : DarkForm
     {
-        private IContainer components;
+        private IContainer components = null;
         private DarkButton btnDage;
         private DarkButton btnEscherion;
         private DarkButton btnNulgath;
