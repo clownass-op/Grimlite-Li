@@ -15,7 +15,7 @@ namespace Grimoire.Tools.Wiki
         public static event Action<string> Log;
         private static void Logd(string msg) => Log?.Invoke(msg);
 
-        private const string BaseUrl = "http://aqwwiki.wikidot.com";
+        private const string BaseUrl = "https://aqwwiki.wikidot.com";
         private static readonly HashSet<string> GenderedCategories = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "Armor", "Class"
@@ -148,20 +148,17 @@ namespace Grimoire.Tools.Wiki
             }
 
             AddCategoryItems(firstDoc, type, results, seenSlugs);
-            int maxPage = GetMaxPage(firstDoc);
+            List<string> pageUrls = GetPageUrls(firstDoc, firstUrl);
 
-            Logd($"'{categorySlug}' has {maxPage} page(s) — page 1 yielded {results.Count} so far");
+            Logd($"'{categorySlug}' has {pageUrls.Count + 1} page URL(s) — page 1 yielded {results.Count} so far");
 
-            if (maxPage > 1)
+            if (pageUrls.Count > 0)
             {
                 using (var semaphore = new SemaphoreSlim(4))
                 {
                     var tasks = new List<Task<HtmlDocument>>();
-                    for (int page = 2; page <= maxPage; page++)
-                    {
-                        int pageNum = page;
-                        tasks.Add(FetchPageThrottled(web, $"{BaseUrl}/{categorySlug}/p/{pageNum}", semaphore));
-                    }
+                    foreach (string pageUrl in pageUrls)
+                        tasks.Add(FetchPageThrottled(pageUrl, semaphore));
 
                     HtmlDocument[] pageDocs = await Task.WhenAll(tasks);
                     foreach (var doc in pageDocs)
@@ -176,12 +173,14 @@ namespace Grimoire.Tools.Wiki
             return results;
         }
 
-        private static async Task<HtmlDocument> FetchPageThrottled(HtmlWeb web, string url, SemaphoreSlim semaphore)
+        private static async Task<HtmlDocument> FetchPageThrottled(string url, SemaphoreSlim semaphore)
         {
             await semaphore.WaitAsync();
             try
             {
                 await Task.Delay(150);
+                // HtmlWeb holds request/response state; give each concurrent page request its own instance.
+                HtmlWeb web = CreateWebClient();
                 var doc = await web.LoadFromWebAsync(url);
                 Logd($"Fetched page: {url}");
                 return doc;
@@ -197,30 +196,70 @@ namespace Grimoire.Tools.Wiki
             }
         }
 
-        private static int GetMaxPage(HtmlDocument doc)
+        private static List<string> GetPageUrls(HtmlDocument doc, string currentUrl)
         {
-            var pagerLinks = doc.DocumentNode.SelectNodes("//div[contains(@class,'pager')]//a");
+            var pagerLinks = doc.DocumentNode.SelectNodes("//div[contains(@class,'pager')]//a[@href]");
             if (pagerLinks == null || pagerLinks.Count == 0)
             {
                 Logd("No pager found on page — treating as single-page category");
-                return 1;
+                return new List<string>();
             }
 
-            int max = 1;
+            Uri baseUri = new Uri(currentUrl);
+            Dictionary<string, Uri> pageTemplates = new Dictionary<string, Uri>(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, string> pagePrefixes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, int> maxPages = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
             foreach (var link in pagerLinks)
             {
-                string text = link.InnerText.Trim();
-                if (int.TryParse(text, out int pageNum) && pageNum > max)
-                    max = pageNum;
-
                 string href = link.GetAttributeValue("href", "");
-                var match = Regex.Match(href, @"/p/(\d+)");
-                if (match.Success && int.TryParse(match.Groups[1].Value, out int hrefPage) && hrefPage > max)
-                    max = hrefPage;
+                if (!Uri.TryCreate(baseUri, href, out Uri pageUri)
+                    || !pageUri.Host.Equals(baseUri.Host, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                Match match = Regex.Match(pageUri.AbsolutePath, @"^(?<prefix>.+)/p/(?<page>\d+)/?$", RegexOptions.IgnoreCase);
+                if (!match.Success || !int.TryParse(match.Groups["page"].Value, out int pageNumber))
+                    continue;
+
+                string prefix = match.Groups["prefix"].Value;
+                UriBuilder normalized = new UriBuilder(pageUri)
+                {
+                    Scheme = Uri.UriSchemeHttps,
+                    Port = -1,
+                    Fragment = string.Empty
+                };
+
+                string key = normalized.Uri.GetLeftPart(UriPartial.Authority) + prefix + normalized.Query;
+                pageTemplates[key] = normalized.Uri;
+                pagePrefixes[key] = prefix;
+
+                if (!maxPages.TryGetValue(key, out int currentMax) || pageNumber > currentMax)
+                    maxPages[key] = pageNumber;
             }
 
-            Logd($"Pager detected — highest page number found: {max}");
-            return max;
+            const int maxPageRequests = 500;
+            List<string> pageUrls = new List<string>();
+            foreach (KeyValuePair<string, int> pageGroup in maxPages)
+            {
+                Uri template = pageTemplates[pageGroup.Key];
+                string prefix = pagePrefixes[pageGroup.Key];
+
+                for (int page = 2; page <= pageGroup.Value && pageUrls.Count < maxPageRequests; page++)
+                {
+                    UriBuilder builder = new UriBuilder(template)
+                    {
+                        Path = $"{prefix}/p/{page}",
+                        Fragment = string.Empty
+                    };
+                    pageUrls.Add(builder.Uri.AbsoluteUri);
+                }
+
+                if (pageUrls.Count >= maxPageRequests)
+                    break;
+            }
+
+            Logd($"Pager detected — {pageUrls.Count} additional page URL(s) found across {maxPages.Count} list(s)");
+            return pageUrls;
         }
 
         private static void AddCategoryItems(HtmlDocument doc, WikiEntryType type, List<WikiEntry> results, HashSet<string> seenSlugs)
