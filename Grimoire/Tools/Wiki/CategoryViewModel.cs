@@ -69,6 +69,20 @@ namespace Grimoire.Tools.Wiki
         public string ChevronGlyph => IsExpanded ? "▾" : "▸";
         public bool HasChildren => Children != null && Children.Count > 0;
 
+        public string CategoryIcon => Type switch
+        {
+            WikiEntryType.Monster => "🐉",
+            WikiEntryType.Item => "🎒",
+            WikiEntryType.Quest => "📜",
+            WikiEntryType.Shop => "🛒",
+            WikiEntryType.Location => "🗺️",
+            WikiEntryType.NPC => "👤",
+            WikiEntryType.Class => "⚔️",
+            WikiEntryType.Enhancement => "🔨",
+            _ => "📁"
+        };
+
+
         public string StatusText
         {
             get
