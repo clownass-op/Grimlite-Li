@@ -21,6 +21,52 @@ namespace Grimoire.Tools.Wiki
         // Wikidot can reset connections when too many requests arrive together.
         private static readonly SemaphoreSlim RequestSemaphore = new SemaphoreSlim(3);
         private const int RequestSpacingMilliseconds = 350;
+        private const int RequestTimeoutMilliseconds = 15000;
+        private const int CircuitFailureThreshold = 5;
+        private static readonly TimeSpan CircuitBreakDuration = TimeSpan.FromSeconds(60);
+        private static readonly object CircuitBreakerLock = new object();
+        private static int _consecutiveRequestFailures;
+        private static DateTime _circuitOpenUntilUtc = DateTime.MinValue;
+
+        private sealed class WikiCircuitOpenException : Exception
+        {
+            public WikiCircuitOpenException(string message) : base(message) { }
+        }
+
+        private static void EnsureCircuitClosed()
+        {
+            lock (CircuitBreakerLock)
+            {
+                if (DateTime.UtcNow < _circuitOpenUntilUtc)
+                    throw new WikiCircuitOpenException($"Wiki requests paused until {_circuitOpenUntilUtc.ToLocalTime():HH:mm:ss}.");
+            }
+        }
+
+        private static void RecordRequestSuccess()
+        {
+            lock (CircuitBreakerLock)
+                _consecutiveRequestFailures = 0;
+        }
+
+        private static void RecordRequestFailure()
+        {
+            bool opened = false;
+            DateTime reopenAt = DateTime.MinValue;
+
+            lock (CircuitBreakerLock)
+            {
+                _consecutiveRequestFailures++;
+                if (_consecutiveRequestFailures >= CircuitFailureThreshold && DateTime.UtcNow >= _circuitOpenUntilUtc)
+                {
+                    _circuitOpenUntilUtc = DateTime.UtcNow.Add(CircuitBreakDuration);
+                    reopenAt = _circuitOpenUntilUtc;
+                    opened = true;
+                }
+            }
+
+            if (opened)
+                Logd($"Circuit breaker OPEN: {_consecutiveRequestFailures} consecutive request failures. Pausing wiki traffic for {(int)CircuitBreakDuration.TotalSeconds}s (until {reopenAt.ToLocalTime():HH:mm:ss}).");
+        }
 
         public static event Action<string> Log;
         private static void Logd(string msg) => Log?.Invoke(msg);
@@ -88,7 +134,8 @@ namespace Grimoire.Tools.Wiki
         {
             var web = new HtmlWeb
             {
-                UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                RequestTimeout = RequestTimeoutMilliseconds
             };
 
             web.PreRequest = request =>
@@ -148,7 +195,7 @@ namespace Grimoire.Tools.Wiki
             {
                 firstDoc = await LoadDocumentWithRetryAsync(firstUrl, $"category '{categorySlug}'").ConfigureAwait(false);
                 if (firstDoc == null)
-                    return results;
+                    return null;
                 Logd($"Fetch completed — NodeCount: {firstDoc.DocumentNode.ChildNodes.Count}");
             }
             catch (Exception ex)
@@ -171,11 +218,14 @@ namespace Grimoire.Tools.Wiki
                         tasks.Add(FetchPageThrottled(pageUrl, semaphore));
 
                     HtmlDocument[] pageDocs = await Task.WhenAll(tasks).ConfigureAwait(false);
-                    foreach (var doc in pageDocs)
+                    if (pageDocs.Any(doc => doc == null))
                     {
-                        if (doc != null)
-                            AddCategoryItems(doc, type, results, seenSlugs);
+                        Logd($"Category '{categorySlug}' was only partially retrieved. Leaving it retryable instead of marking incomplete results as loaded.");
+                        return null;
                     }
+
+                    foreach (HtmlDocument doc in pageDocs)
+                        AddCategoryItems(doc, type, results, seenSlugs);
                 }
             }
 
@@ -189,21 +239,30 @@ namespace Grimoire.Tools.Wiki
 
             for (int attempt = 1; attempt <= maxAttempts; attempt++)
             {
+                EnsureCircuitClosed();
                 await RequestSemaphore.WaitAsync().ConfigureAwait(false);
                 try
                 {
+                    EnsureCircuitClosed();
+
                     HtmlWeb web = CreateWebClient();
                     HtmlDocument doc = await web.LoadFromWebAsync(url).ConfigureAwait(false);
                     if (doc == null || doc.DocumentNode == null || doc.DocumentNode.ChildNodes.Count == 0)
                         throw new InvalidOperationException("The server returned an empty document.");
 
+                    RecordRequestSuccess();
                     if (attempt > 1)
                         Logd($"Recovered {context} on attempt {attempt}/{maxAttempts}.");
 
                     return doc;
                 }
+                catch (WikiCircuitOpenException)
+                {
+                    throw;
+                }
                 catch (Exception ex)
                 {
+                    RecordRequestFailure();
                     Logd($"Attempt {attempt}/{maxAttempts} failed for {context}: {ex.GetType().Name}: {ex.Message}");
                     if (attempt == maxAttempts)
                         break;
