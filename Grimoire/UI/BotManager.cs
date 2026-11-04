@@ -11,7 +11,6 @@ using Grimoire.Game.Data;
 using Grimoire.Networking;
 using Grimoire.Properties;
 using Grimoire.Tools;
-using Grimoire.UI;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
