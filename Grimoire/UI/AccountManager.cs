@@ -1675,9 +1675,8 @@ namespace Grimoire.UI
                 
                 //LogForm.Instance.AppendDebug("[ON SERVERS LOADED] Completed successfully");
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                //LogForm.Instance.AppendDebug($"[ON SERVERS LOADED] Error: {ex.Message}");
                 //LogForm.Instance.AppendDebug($"[ON SERVERS LOADED] Stack: {ex.StackTrace}");
             }
         }
