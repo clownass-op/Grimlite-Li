@@ -1975,7 +1975,7 @@ namespace Grimoire.UI
                         OptionsManager.LoginPassword = password;
                         
                         // Delay login to let UI message loop process first
-                        Task.Delay(500).ContinueWith(_ =>
+                        _ = Task.Delay(500).ContinueWith(_ =>
                         {
                             AutoRelogin.Login(server, 15000, new System.Threading.CancellationTokenSource(), ensureSuccess: false);
                             Debug.WriteLine($"Login request sent for first account: {username}");
