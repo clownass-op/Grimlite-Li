@@ -201,7 +201,7 @@ namespace Grimoire.Tools.Wiki
             catch (Exception ex)
             {
                 Logd($"EXCEPTION loading '{categorySlug}': {ex.GetType().Name}: {ex.Message}");
-                return results;
+                return null;
             }
 
             AddCategoryItems(firstDoc, type, results, seenSlugs);
