@@ -22,7 +22,6 @@ namespace Grimoire.FlashTools
 
         public static event FlashCallHandler FlashCall;
         public static event FlashErrorHandler FlashError;
-        public static event Action<int> SwfLoadProgress;
 
         public static string Call(string function, params object[] args)
         {
