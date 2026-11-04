@@ -491,6 +491,49 @@ namespace Grimoire.Tools.Wiki
             e.Handled = true;
         }
 
+        private async void LoadAllCategories_Click(object sender, RoutedEventArgs e)
+        {
+            List<CategoryViewModel> pending = _categories.Where(category => !category.IsLoaded && !category.IsLoading).ToList();
+            if (pending.Count == 0)
+            {
+                OnScraperLog("All Wiki categories are already loaded or currently loading.");
+                return;
+            }
+
+            btnLoadAll.IsEnabled = false;
+            btnLoadAll.Content = $"Loading 0/{pending.Count}";
+            OnScraperLog($"Load All started — {pending.Count} categories queued.");
+
+            try
+            {
+                int completed = 0;
+                List<Task> tasks = new List<Task>(pending.Count);
+                foreach (CategoryViewModel category in pending)
+                {
+                    category.IsExpanded = true;
+                    tasks.Add(LoadCategoryAndUpdateProgressAsync(category, () =>
+                    {
+                        completed++;
+                        btnLoadAll.Content = $"Loading {completed}/{pending.Count}";
+                    }));
+                }
+
+                await Task.WhenAll(tasks);
+                OnScraperLog($"Load All finished — {completed}/{pending.Count} categories processed.");
+            }
+            finally
+            {
+                btnLoadAll.Content = "↓ Load All";
+                btnLoadAll.IsEnabled = true;
+            }
+        }
+
+        private async Task LoadCategoryAndUpdateProgressAsync(CategoryViewModel category, Action onCompleted)
+        {
+            await LoadCategoryAsync(category);
+            onCompleted?.Invoke();
+        }
+
         private static readonly SemaphoreSlim CategoryLoadSemaphore = new SemaphoreSlim(4);
 
         private async Task<List<WikiEntry>> ScrapeCategorySlugAsync(string slug, WikiEntryType type, string categoryName)
@@ -570,7 +613,8 @@ namespace Grimoire.Tools.Wiki
                 }
                 else
                 {
-                    category.AllEntries = await WikiScraper.ScrapeCategoryListAsync(category.Slug, category.Type);
+                    category.AllEntries = await ScrapeCategorySlugAsync(category.Slug, category.Type, category.Name)
+                        ?? new List<WikiEntry>();
                     foreach (WikiEntry entry in category.AllEntries)
                         entry.CategoryLabel = category.Name;
                 }
