@@ -11,7 +11,7 @@ namespace Grimoire.UI
 {
     public class PacketTamperer : DarkForm
     {
-        private IContainer components;
+        private IContainer components = null;
 
         private RichTextBox txtSend;
 
