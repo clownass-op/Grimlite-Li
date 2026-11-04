@@ -9,7 +9,6 @@ namespace Grimoire.UI
 
 		#region Definitions
 		private IContainer components;
-		private Panel[] _panels;
 		public static LogForm Log;
 		private string _customName;
 		private string _customGuild;
@@ -6260,9 +6259,5 @@ namespace Grimoire.UI
 		private DarkButton btnSkillsAddSkillSet;
 		// All Quests (Skua-style quest cache) controls
 		public ListBox lstAllQuests;
-		private DarkButton btnUpdateQuests;
-		private DarkButton btnLoadQuests;
-		private DarkButton btnImportQuests;
-		private DarkLabel lblQuestStatus;
     }
 }
