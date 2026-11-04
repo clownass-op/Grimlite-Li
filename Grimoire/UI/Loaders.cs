@@ -30,7 +30,7 @@ namespace Grimoire.UI
             Monsters
         }
 
-        private IContainer components;
+        private IContainer components = null;
 
         private DarkTextBox txtLoaders;
 
