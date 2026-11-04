@@ -22,9 +22,8 @@ namespace Grimoire.UI
 {
     public class UserFriendlyCommandEditor : DarkForm
     {
-        private IContainer components;
+        private IContainer components = null;
         private DarkButton btnOK;
-        private ToolStripContainer toolStripContainer1;
         private SplitContainer splitContainer1;
         private DarkButton btnRawCommand;
         private DarkButton btnCancel;
