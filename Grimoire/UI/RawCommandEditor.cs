@@ -8,7 +8,7 @@ namespace Grimoire.UI
 {
     public class RawCommandEditor : DarkForm
     {
-        private IContainer components;
+        private IContainer components = null;
         private DarkButton btnOK;
         private DarkButton btnCancel;
         private DarkTextBox txtCmd;
