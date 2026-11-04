@@ -14,8 +14,8 @@ namespace Grimoire.Tools.Wiki
     {
         static WikiScraper()
         {
-            // HtmlWeb uses HttpWebRequest; raise the default per-host connection cap to match bounded concurrency.
-            ServicePointManager.DefaultConnectionLimit = 12;
+            // HtmlWeb uses HttpWebRequest; raise the per-host connection cap to match four category loads with up to eight page requests each.
+            ServicePointManager.DefaultConnectionLimit = 32;
         }
 
         public static event Action<string> Log;
