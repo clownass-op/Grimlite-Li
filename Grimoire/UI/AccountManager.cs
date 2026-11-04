@@ -1491,9 +1491,8 @@ namespace Grimoire.UI
                             }
                         }
                     }
-                    catch (Exception ex)
+                    catch (Exception)
                     {
-                        //LogForm.Instance.AppendDebug($"[SERVER FETCH] Parse error: {ex.Message}");
                         //LogForm.Instance.AppendDebug($"[SERVER FETCH] Stack trace: {ex.StackTrace}");
                         retryCount++;
                         
@@ -1505,9 +1504,8 @@ namespace Grimoire.UI
                         }
                     }
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    //LogForm.Instance.AppendDebug($"[SERVER FETCH] Fetch error: {ex.Message}");
                     //LogForm.Instance.AppendDebug($"[SERVER FETCH] Stack trace: {ex.StackTrace}");
                     retryCount++;
                     
