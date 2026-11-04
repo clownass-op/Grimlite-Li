@@ -586,7 +586,18 @@ namespace Grimoire.Tools.Wiki
                     for (int i = 0; i < slugs.Count; i++)
                     {
                         List<WikiEntry> entries = results[i];
-                        if (entries == null) continue;
+                        if (entries == null)
+                        {
+                            CategoryViewModel failedChild = category.Children.FirstOrDefault(c =>
+                                string.Equals(c.Slug, slugs[i], StringComparison.OrdinalIgnoreCase));
+                            if (failedChild != null)
+                            {
+                                failedChild.IsLoading = false;
+                                failedChild.IsLoaded = false;
+                                failedChild.RaiseCountChanged();
+                            }
+                            continue;
+                        }
 
                         CategoryViewModel child = category.Children.FirstOrDefault(c =>
                             string.Equals(c.Slug, slugs[i], StringComparison.OrdinalIgnoreCase));
@@ -611,16 +622,27 @@ namespace Grimoire.Tools.Wiki
                     }
 
                     category.AllEntries = merged;
+                    category.IsLoaded = results.All(entries => entries != null);
+                    if (!category.IsLoaded)
+                        OnScraperLog($"Category '{category.Name}' is incomplete. Successfully loaded entries are retained; failed subcategories can be retried.");
                 }
                 else
                 {
-                    category.AllEntries = await ScrapeCategorySlugAsync(category.Slug, category.Type, category.Name)
-                        ?? new List<WikiEntry>();
+                    List<WikiEntry> entries = await ScrapeCategorySlugAsync(category.Slug, category.Type, category.Name);
+                    if (entries == null)
+                    {
+                        category.IsLoaded = false;
+                        OnScraperLog($"Category '{category.Name}' was not loaded and remains available for retry.");
+                        return;
+                    }
+
+                    category.AllEntries = entries;
                     foreach (WikiEntry entry in category.AllEntries)
                         entry.CategoryLabel = category.Name;
+                    category.IsLoaded = true;
                 }
 
-                category.IsLoaded = true;
+
                 category.ApplyFilter(txtSearch.Text);
             }
             catch (Exception ex)
