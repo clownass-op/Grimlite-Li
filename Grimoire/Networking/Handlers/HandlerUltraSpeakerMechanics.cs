@@ -21,9 +21,6 @@ namespace Grimoire.Networking.Handlers
 
         public string[] HandledCommands { get; } = { "ct" };
 
-        private int _truthCount = 0;
-        private int _listenCount = 0;
-        private int _equalCount = 0;
 
         private int _speakerCounter = -1;
 
