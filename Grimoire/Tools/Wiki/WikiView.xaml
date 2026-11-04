@@ -336,9 +336,20 @@
                     </Grid>
                 </Border>
 
-                <TextBlock x:Name="txtCount" DockPanel.Dock="Top" Text=""
-                           FontSize="10.5" FontFamily="Consolas" Foreground="{StaticResource TextLow}"
-                           Margin="2,0,0,10" Visibility="Collapsed" />
+                <Grid DockPanel.Dock="Top" Margin="2,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="txtCount" Grid.Column="0" Text=""
+                               FontSize="10.5" FontFamily="Consolas" Foreground="{StaticResource TextLow}"
+                               VerticalAlignment="Center" />
+                    <Button x:Name="btnLoadAll" Grid.Column="1" Content="↓ Load All"
+                            Click="LoadAllCategories_Click" Padding="10,5" FontSize="11"
+                            Cursor="Hand" Background="{StaticResource Raised}"
+                            Foreground="{StaticResource TextHi}" BorderBrush="{StaticResource Hairline}"
+                            BorderThickness="1" HorizontalAlignment="Right" />
+                </Grid>
 
                 <Border DockPanel.Dock="Top" BorderBrush="{StaticResource Hairline}"
                         BorderThickness="0,0,0,1" Margin="1,0,0,10" />
@@ -457,6 +468,19 @@
                                             </Button>
                                         </Grid>
 
+                                        <ProgressBar Height="3" Margin="16,0,8,5" IsIndeterminate="True">
+                                            <ProgressBar.Style>
+                                                <Style TargetType="ProgressBar">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsLoading}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </ProgressBar.Style>
+                                        </ProgressBar>
+
                                         <ListBox ItemsSource="{Binding FilteredEntries}"
                                                  DisplayMemberPath="Name"
                                                  SelectionChanged="lstEntries_SelectionChanged"
@@ -562,6 +586,19 @@
                                                                            Foreground="{StaticResource Accent}" />
                                                             </Button>
                                                         </Grid>
+
+                                                        <ProgressBar Height="2" Margin="14,0,8,4" IsIndeterminate="True">
+                                                            <ProgressBar.Style>
+                                                                <Style TargetType="ProgressBar">
+                                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsLoading}" Value="True">
+                                                                            <Setter Property="Visibility" Value="Visible" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </ProgressBar.Style>
+                                                        </ProgressBar>
 
                                                         <ListBox ItemsSource="{Binding FilteredEntries}"
                                                                  DisplayMemberPath="Name"
