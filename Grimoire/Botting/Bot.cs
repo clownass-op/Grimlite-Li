@@ -494,7 +494,7 @@ namespace Grimoire.Botting
             }
             else if (Configuration.EnablePickup && flag)
             {
-                World.DropStack.GetDrop(drop.Id);
+                _ = World.DropStack.GetDrop(drop.Id);
             }
 
             if (Configuration.EnablePickupAcTagged)
