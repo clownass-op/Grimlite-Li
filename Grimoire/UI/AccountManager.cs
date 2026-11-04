@@ -1985,7 +1985,7 @@ namespace Grimoire.UI
                         if (cbStartWithScript.Checked && !string.IsNullOrEmpty(tbScriptPath.Text) && File.Exists(tbScriptPath.Text))
                         {
                             var scriptPath = tbScriptPath.Text;
-                            Task.Run(async () =>
+                            _ = Task.Run(async () =>
                             {
                                 try
                                 {
