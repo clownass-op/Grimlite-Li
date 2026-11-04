@@ -1971,11 +1971,12 @@ namespace Grimoire.UI
                         OptionsManager.LoginPassword = password;
                         
                         // Delay login to let UI message loop process first
-                        _ = Task.Delay(500).ContinueWith(_ =>
+                        _ = Task.Run(async () =>
                         {
-                            AutoRelogin.Login(server, 15000, new System.Threading.CancellationTokenSource(), ensureSuccess: false);
+                            await Task.Delay(500).ConfigureAwait(false);
+                            await AutoRelogin.Login(server, 15000, new System.Threading.CancellationTokenSource(), ensureSuccess: false).ConfigureAwait(false);
                             Debug.WriteLine($"Login request sent for first account: {username}");
-                        }, TaskScheduler.Default);
+                        });
                         
                         // Load script in background once logged in (non-blocking)
                         if (cbStartWithScript.Checked && !string.IsNullOrEmpty(tbScriptPath.Text) && File.Exists(tbScriptPath.Text))
