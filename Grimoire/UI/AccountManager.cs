@@ -80,7 +80,6 @@ namespace Grimoire.UI
         private DarkButton btnRemoveSelected;
         private DarkButton btnStartAll;
         private DarkLabel lblSelectedTop;
-        private DarkLabel lblSelectedCount;
         private DarkNumericUpDown nudColumns;
         public DarkTextBox tbWebhook;
         private FlowLayoutPanel flowServers;
@@ -118,8 +117,6 @@ namespace Grimoire.UI
         private DarkTextBox tbNewPassword;
         private DarkTextBox tbNewDisplayName;
         private DarkButton btnAddAccount;
-        private DarkLabel lblAddHint;
-        private DarkGroupBox gbAddAccountTop;
         private HashSet<int> _selected = new HashSet<int>();
 
         // Script selector
