@@ -88,7 +88,7 @@ namespace Grimoire.Tools
                 await Task.Delay(relogDelay);
                 if (ensureSuccess)
                 {
-                    Task.Run(() => EnsureLoginSuccess(cts));
+                    _ = Task.Run(() => EnsureLoginSuccess(cts));
                 }
                 if (killLag)
                 {
