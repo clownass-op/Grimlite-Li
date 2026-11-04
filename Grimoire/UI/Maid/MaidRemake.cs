@@ -873,7 +873,6 @@ namespace Grimoire.UI.Maid
                     
                     if (auraNames.Count == 0)
                     {
-                        _auraCacheValid = true;
                         return;
                     }
                     
