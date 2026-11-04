@@ -951,9 +951,8 @@ namespace Grimoire.UI
             
             //LogForm.Instance.AppendDebug("[FORM LOAD] Server load completed");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            //LogForm.Instance.AppendDebug($"[FORM LOAD] Exception during server fetch: {ex.Message}");
             //LogForm.Instance.AppendDebug($"[FORM LOAD] Stack: {ex.StackTrace}");
             // Load defaults on exception too
             try { LoadDefaultServers(); } catch { }
