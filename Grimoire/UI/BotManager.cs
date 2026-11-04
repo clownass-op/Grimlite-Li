@@ -2547,16 +2547,16 @@ namespace Grimoire.UI
             switch (s.Name)
             {
                 case "btnSetGood":
-                    Proxy.Instance.SendToServer("%xt%zm%updateQuest%218701%41%1%");
+                    _ = Proxy.Instance.SendToServer("%xt%zm%updateQuest%218701%41%1%");
                     break;
                 case "btnSetEvil":
-                    Proxy.Instance.SendToServer("%xt%zm%updateQuest%218701%41%2%");
+                    _ = Proxy.Instance.SendToServer("%xt%zm%updateQuest%218701%41%2%");
                     break;
                 case "btnSetChaos":
-                    Proxy.Instance.SendToServer("%xt%zm%updateQuest%218701%41%3%");
+                    _ = Proxy.Instance.SendToServer("%xt%zm%updateQuest%218701%41%3%");
                     break;
                 case "btnSetUndecided":
-                    Proxy.Instance.SendToServer("%xt%zm%updateQuest%218701%41%5%");
+                    _ = Proxy.Instance.SendToServer("%xt%zm%updateQuest%218701%41%5%");
                     break;
                 case "btnSetMem":
                     Player.ChangeAccessLevel("Member");
@@ -3439,7 +3439,6 @@ namespace Grimoire.UI
             {
                 //"cmd":"aura++","auras":[{"nam":"Counter Attack"
                 //prepares a counter attack!!
-                string c1 = "\"cmd\":\"aura++\",\"auras\":[{\"nam\":\"Counter Attack\"";
                 string c2 = "prepares a counter attack";
                 if (msg.Contains(c2))
                 {
