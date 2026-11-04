@@ -503,7 +503,7 @@ namespace Grimoire.Tools.Wiki
             catch (Exception ex)
             {
                 OnScraperLog($"FATAL ERROR scraping '{slug}' (part of '{categoryName}'): {ex.Message}");
-                return new List<WikiEntry>();
+                return null;
             }
             finally
             {
@@ -542,6 +542,8 @@ namespace Grimoire.Tools.Wiki
                     for (int i = 0; i < slugs.Count; i++)
                     {
                         List<WikiEntry> entries = results[i];
+                        if (entries == null) continue;
+
                         CategoryViewModel child = category.Children.FirstOrDefault(c =>
                             string.Equals(c.Slug, slugs[i], StringComparison.OrdinalIgnoreCase));
 
