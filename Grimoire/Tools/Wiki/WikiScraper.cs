@@ -12,6 +12,12 @@ namespace Grimoire.Tools.Wiki
 {
     public static class WikiScraper
     {
+        static WikiScraper()
+        {
+            // HtmlWeb uses HttpWebRequest; raise the default per-host connection cap to match bounded concurrency.
+            ServicePointManager.DefaultConnectionLimit = 12;
+        }
+
         public static event Action<string> Log;
         private static void Logd(string msg) => Log?.Invoke(msg);
 
@@ -154,7 +160,7 @@ namespace Grimoire.Tools.Wiki
 
             if (pageUrls.Count > 0)
             {
-                using (var semaphore = new SemaphoreSlim(4))
+                using (var semaphore = new SemaphoreSlim(8))
                 {
                     var tasks = new List<Task<HtmlDocument>>();
                     foreach (string pageUrl in pageUrls)
@@ -178,7 +184,6 @@ namespace Grimoire.Tools.Wiki
             await semaphore.WaitAsync();
             try
             {
-                await Task.Delay(150);
                 // HtmlWeb holds request/response state; give each concurrent page request its own instance.
                 HtmlWeb web = CreateWebClient();
                 var doc = await web.LoadFromWebAsync(url);
