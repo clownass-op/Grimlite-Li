@@ -69,36 +69,8 @@ namespace Grimoire.UI
                 listBox1.Items.Add(cmd);
             }
 
-            return;
-
-            int y = 30;
-
-            foreach (var obj in classes) {
-                var node = new CommandNode();
-
-                var properties = obj.GetType().GetProperties();
-                var propList = properties.ToList();
-
-                node.Name = obj.Name;
-
-                foreach (var prop in propList)
-                {
-                    y += 30;
-                    var label = new Label();
-                    label.Location = new Point(13, y);
-                    label.Text = prop.Name;
-
-                    var textBox = new TextBox();
-                    textBox.Location = new Point(43, y);
-                    textBox.Text = "text for " + prop.Name + " here";
-
-                    node.Controls.Add(textBox);
-                    node.Controls.Add(label);
-                }
-
-                this.splitContainer1.Panel2.Controls.Add(node);
-            }
         }
+
 
         
 
