@@ -51,7 +51,12 @@ namespace Grimoire.Botting.Commands.Combat
             return "Attack " + this.Monster;
         }
 
-        private int _skillIndex;
+        private static int _skillIndex;
+
+        public static void ResetSkillIndex()
+        {
+            _skillIndex = 0;
+        }
         private int Index;
         
         
