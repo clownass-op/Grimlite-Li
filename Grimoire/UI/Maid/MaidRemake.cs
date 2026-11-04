@@ -934,7 +934,6 @@ namespace Grimoire.UI.Maid
                     }
                     
                     LogForm.Instance?.AppendDebug($"[Maid] Preloaded {successCount}/{auraNames.Count} auras successfully");
-                    _auraCacheValid = true;
                     
                     // Confirm cache is ready for condition evaluation
                     if (successCount > 0)
