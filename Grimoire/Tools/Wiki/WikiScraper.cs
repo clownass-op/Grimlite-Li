@@ -144,7 +144,7 @@ namespace Grimoire.Tools.Wiki
             HtmlDocument firstDoc;
             try
             {
-                firstDoc = await web.LoadFromWebAsync(firstUrl);
+                firstDoc = await web.LoadFromWebAsync(firstUrl).ConfigureAwait(false);
                 Logd($"Fetch completed — StatusCode: {web.StatusCode}, ResponseUri: {web.ResponseUri}, NodeCount: {firstDoc.DocumentNode.ChildNodes.Count}");
             }
             catch (Exception ex)
@@ -166,7 +166,7 @@ namespace Grimoire.Tools.Wiki
                     foreach (string pageUrl in pageUrls)
                         tasks.Add(FetchPageThrottled(pageUrl, semaphore));
 
-                    HtmlDocument[] pageDocs = await Task.WhenAll(tasks);
+                    HtmlDocument[] pageDocs = await Task.WhenAll(tasks).ConfigureAwait(false);
                     foreach (var doc in pageDocs)
                     {
                         if (doc != null)
@@ -181,12 +181,12 @@ namespace Grimoire.Tools.Wiki
 
         private static async Task<HtmlDocument> FetchPageThrottled(string url, SemaphoreSlim semaphore)
         {
-            await semaphore.WaitAsync();
+            await semaphore.WaitAsync().ConfigureAwait(false);
             try
             {
                 // HtmlWeb holds request/response state; give each concurrent page request its own instance.
                 HtmlWeb web = CreateWebClient();
-                var doc = await web.LoadFromWebAsync(url);
+                var doc = await web.LoadFromWebAsync(url).ConfigureAwait(false);
                 Logd($"Fetched page: {url}");
                 return doc;
             }
@@ -359,12 +359,12 @@ namespace Grimoire.Tools.Wiki
                 Logd($"Scraping detail: {entry.WikiUrl}");
 
                 HtmlWeb web = CreateWebClient();
-                HtmlDocument doc = await web.LoadFromWebAsync(entry.WikiUrl);
+                HtmlDocument doc = await web.LoadFromWebAsync(entry.WikiUrl).ConfigureAwait(false);
 
                 string pageText = doc.DocumentNode.InnerText;
                 if (pageText.Contains("usually refers to") || pageText.Contains("disambiguation"))
                 {
-                    doc = await ResolveDisambiguationAsync(web, doc, entry.Name) ?? doc;
+                    doc = await ResolveDisambiguationAsync(web, doc, entry.Name).ConfigureAwait(false) ?? doc;
                 }
 
                 var pageContent = FindPageContent(doc, $"detail: {entry.Name}");
@@ -2712,7 +2712,7 @@ namespace Grimoire.Tools.Wiki
 
                 try
                 {
-                    var candidate = await web.LoadFromWebAsync($"{BaseUrl}{href}");
+                    var candidate = await web.LoadFromWebAsync($"{BaseUrl}{href}").ConfigureAwait(false);
                     if (candidate.DocumentNode.SelectSingleNode("//div[contains(@class,'page-content')]") != null)
                     {
                         Logd($"Disambiguation resolved to: {BaseUrl}{href}");
