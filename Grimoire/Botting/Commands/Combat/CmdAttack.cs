@@ -56,12 +56,6 @@ namespace Grimoire.Botting.Commands.Combat
         private int _skillIndex;
         private int Index;
         
-        /// <summary>Reset skill indices when bot stops</summary>
-        public static void ResetSkillIndex()
-        {
-            _staticSkillIndex = 0;
-        }
-        private static int _staticSkillIndex = 0;
         
         private async Task UseSkillsSet(IBotEngine instance)
         {
