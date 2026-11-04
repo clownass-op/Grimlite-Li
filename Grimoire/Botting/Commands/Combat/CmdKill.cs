@@ -174,10 +174,8 @@ namespace Grimoire.Botting.Commands.Combat
                 Flash.FlashCall -= AntiCounterHandler;
             }
 
-            _cts?.Cancel(false);
         }
 
-        private CancellationTokenSource _cts;
 
         private void AntiCounterHandler(AxShockwaveFlashObjects.AxShockwaveFlash flash, string function, params object[] args)
         {
