@@ -893,7 +893,7 @@ namespace Grimoire.UI
                 await Proxy.Instance.SendToClient(packet);
                 tbGeneratedPacket.Text = packet;
             }
-            catch (Exception ex)
+            catch (Exception)
             {
 
             }
