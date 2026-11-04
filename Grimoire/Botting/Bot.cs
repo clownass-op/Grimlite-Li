@@ -490,7 +490,7 @@ namespace Grimoire.Botting
             bool flag = Configuration.Drops.Any((string d) => d.Equals(drop.Name, StringComparison.OrdinalIgnoreCase));
             if (Configuration.EnablePickupAll)
             {
-                World.DropStack.GetDrop(drop.Id);
+                _ = World.DropStack.GetDrop(drop.Id);
             }
             else if (Configuration.EnablePickup && flag)
             {
@@ -501,7 +501,7 @@ namespace Grimoire.Botting
             {
                 if (drop.IsAcItem)
                 {
-                    World.DropStack.GetDrop(drop.Id);
+                    _ = World.DropStack.GetDrop(drop.Id);
                 }
             }
         }
