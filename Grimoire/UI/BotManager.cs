@@ -3045,25 +3045,11 @@ namespace Grimoire.UI
             try
             {
                 rtbInfo.Rtf = richTextBox2.Text;
-                return;
-
-                var currDir = System.AppDomain.CurrentDomain.BaseDirectory;
-                var tempDoc = $@"{currDir}/tempdoc";
-                var target = $@"{currDir}/temprtf";
-                if (File.Exists(tempDoc))
-                {
-                    File.Delete(tempDoc);
-                }
-                using (FileStream newFile = File.Create(tempDoc))
-                {
-                    byte[] toWrite = new UTF8Encoding(true).GetBytes(richTextBox2.Text);
-                    newFile.Write(toWrite, 0, toWrite.Length);
-                }
-                var tempRtf = "";
-                Task.WaitAll(Task.Run(() => DocConvert.toRtf(tempDoc, target, out tempRtf)));
-                rtbInfo.Rtf = File.ReadAllText(tempRtf);
             }
-            catch { };
+            catch
+            {
+                // Ignore invalid RTF while the editor is updating.
+            }
         }
 
         private void rtbInfo_LinkClicked(object sender, LinkClickedEventArgs e)
