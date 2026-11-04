@@ -15,8 +15,6 @@ namespace Grimoire.Botting.Commands.Combat
 		{
 			BotData.BotState = BotData.State.Combat;
 			
-			// Reset skill index at the start of each attack
-			ResetSkillIndex();
 			
 			if (instance.Configuration.SkipAttack)
             {
@@ -42,7 +40,7 @@ namespace Grimoire.Botting.Commands.Combat
             if (UseSkill)
             {
                 if (instance.Configuration.Skills.Count > 0)
-                    UseSkillsSet(instance);
+                    await UseSkillsSet(instance);
                     //Task.Run(() => UseSkillsSet(instance));
             }
 
@@ -53,15 +51,14 @@ namespace Grimoire.Botting.Commands.Combat
             return "Attack " + this.Monster;
         }
 
-        private int _skillIndex;
-        private int Index;
-        
-        /// <summary>Reset skill indices when bot stops</summary>
+        private static int _skillIndex;
+
         public static void ResetSkillIndex()
         {
-            _staticSkillIndex = 0;
+            _skillIndex = 0;
         }
-        private static int _staticSkillIndex = 0;
+        private int Index;
+        
         
         private async Task UseSkillsSet(IBotEngine instance)
         {

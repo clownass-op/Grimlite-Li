@@ -71,7 +71,6 @@ namespace Grimoire.UI.Maid
         
         // Aura caching to avoid repeated expensive Flash calls
         private Dictionary<string, int> _auraCache = new Dictionary<string, int>();
-        private bool _auraCacheValid = false;
         private DateTime _lastAuraPreloadTime = DateTime.MinValue;
         private const int AURA_PRELOAD_INTERVAL_MS = 10000; // Preload every 10 seconds
 
@@ -844,12 +843,10 @@ namespace Grimoire.UI.Maid
         {
             if (customSkillSet == null) 
             {
-                _auraCacheValid = true;
-                return;
+                    return;
             }
             
             // Mark as invalid while we're loading
-            _auraCacheValid = false;
             
             // Run in background thread
             await Task.Run(() =>
@@ -876,7 +873,6 @@ namespace Grimoire.UI.Maid
                     
                     if (auraNames.Count == 0)
                     {
-                        _auraCacheValid = true;
                         return;
                     }
                     
@@ -938,7 +934,6 @@ namespace Grimoire.UI.Maid
                     }
                     
                     LogForm.Instance?.AppendDebug($"[Maid] Preloaded {successCount}/{auraNames.Count} auras successfully");
-                    _auraCacheValid = true;
                     
                     // Confirm cache is ready for condition evaluation
                     if (successCount > 0)
@@ -949,8 +944,7 @@ namespace Grimoire.UI.Maid
                 catch (Exception ex)
                 {
                     LogForm.Instance?.AppendDebug($"[Maid] Error in PreloadAuras: {ex.Message}");
-                    _auraCacheValid = true; // Mark as valid anyway to prevent infinite retry
-                }
+                        }
             });
         }
 

@@ -51,7 +51,7 @@ namespace Grimoire.Networking.Handlers
                 }
                 _tcs.TrySetResult(true);
             }
-            catch (Exception ex)
+            catch (Exception)
             {
                 _tcs.TrySetResult(false);
             }

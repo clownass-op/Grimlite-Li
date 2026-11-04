@@ -241,7 +241,7 @@ namespace Grimoire.UI
                     }
                 }
             }
-            catch (Exception E)
+            catch (Exception)
             {
 
             }

@@ -90,10 +90,10 @@ namespace Grimoire.UI
 
         protected override void OnPaint(PaintEventArgs e) // you can safely omit this method if you want
         {
-            e.Graphics.FillRectangle(Brushes.Transparent, Top);
-            e.Graphics.FillRectangle(Brushes.Transparent, Left);
-            e.Graphics.FillRectangle(Brushes.Transparent, Right);
-            e.Graphics.FillRectangle(Brushes.Transparent, Bottom);
+            e.Graphics.FillRectangle(Brushes.Transparent, TopBorder);
+            e.Graphics.FillRectangle(Brushes.Transparent, LeftBorder);
+            e.Graphics.FillRectangle(Brushes.Transparent, RightBorder);
+            e.Graphics.FillRectangle(Brushes.Transparent, BottomBorder);
         }
 
         private const int
@@ -108,10 +108,10 @@ namespace Grimoire.UI
 
         const int _ = 6; // you can rename this variable if you like
 
-        Rectangle Top { get { return new Rectangle(0, 0, this.ClientSize.Width, _); } }
-        Rectangle Left { get { return new Rectangle(0, 0, _, this.ClientSize.Height); } }
-        Rectangle Bottom { get { return new Rectangle(0, this.ClientSize.Height - _, this.ClientSize.Width, _); } }
-        Rectangle Right { get { return new Rectangle(this.ClientSize.Width - _, 0, _, this.ClientSize.Height); } }
+        Rectangle TopBorder { get { return new Rectangle(0, 0, this.ClientSize.Width, _); } }
+        Rectangle LeftBorder { get { return new Rectangle(0, 0, _, this.ClientSize.Height); } }
+        Rectangle BottomBorder { get { return new Rectangle(0, this.ClientSize.Height - _, this.ClientSize.Width, _); } }
+        Rectangle RightBorder { get { return new Rectangle(this.ClientSize.Width - _, 0, _, this.ClientSize.Height); } }
 
         Rectangle TopLeft { get { return new Rectangle(0, 0, _, _); } }
         Rectangle TopRight { get { return new Rectangle(this.ClientSize.Width - _, 0, _, _); } }
@@ -132,10 +132,10 @@ namespace Grimoire.UI
                 else if (BottomLeft.Contains(cursor)) message.Result = (IntPtr)HTBOTTOMLEFT;
                 else if (BottomRight.Contains(cursor)) message.Result = (IntPtr)HTBOTTOMRIGHT;
 
-                else if (Top.Contains(cursor)) message.Result = (IntPtr)HTTOP;
-                else if (Left.Contains(cursor)) message.Result = (IntPtr)HTLEFT;
-                else if (Right.Contains(cursor)) message.Result = (IntPtr)HTRIGHT;
-                else if (Bottom.Contains(cursor)) message.Result = (IntPtr)HTBOTTOM;
+                else if (TopBorder.Contains(cursor)) message.Result = (IntPtr)HTTOP;
+                else if (LeftBorder.Contains(cursor)) message.Result = (IntPtr)HTLEFT;
+                else if (RightBorder.Contains(cursor)) message.Result = (IntPtr)HTRIGHT;
+                else if (BottomBorder.Contains(cursor)) message.Result = (IntPtr)HTBOTTOM;
             }
 
         }

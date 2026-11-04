@@ -11,7 +11,6 @@ using Grimoire.Game.Data;
 using Grimoire.Networking;
 using Grimoire.Properties;
 using Grimoire.Tools;
-using Grimoire.UI;
 using Newtonsoft.Json;
 using System;
 using System.Collections.Generic;
@@ -2548,16 +2547,16 @@ namespace Grimoire.UI
             switch (s.Name)
             {
                 case "btnSetGood":
-                    Proxy.Instance.SendToServer("%xt%zm%updateQuest%218701%41%1%");
+                    _ = Proxy.Instance.SendToServer("%xt%zm%updateQuest%218701%41%1%");
                     break;
                 case "btnSetEvil":
-                    Proxy.Instance.SendToServer("%xt%zm%updateQuest%218701%41%2%");
+                    _ = Proxy.Instance.SendToServer("%xt%zm%updateQuest%218701%41%2%");
                     break;
                 case "btnSetChaos":
-                    Proxy.Instance.SendToServer("%xt%zm%updateQuest%218701%41%3%");
+                    _ = Proxy.Instance.SendToServer("%xt%zm%updateQuest%218701%41%3%");
                     break;
                 case "btnSetUndecided":
-                    Proxy.Instance.SendToServer("%xt%zm%updateQuest%218701%41%5%");
+                    _ = Proxy.Instance.SendToServer("%xt%zm%updateQuest%218701%41%5%");
                     break;
                 case "btnSetMem":
                     Player.ChangeAccessLevel("Member");
@@ -3046,25 +3045,11 @@ namespace Grimoire.UI
             try
             {
                 rtbInfo.Rtf = richTextBox2.Text;
-                return;
-
-                var currDir = System.AppDomain.CurrentDomain.BaseDirectory;
-                var tempDoc = $@"{currDir}/tempdoc";
-                var target = $@"{currDir}/temprtf";
-                if (File.Exists(tempDoc))
-                {
-                    File.Delete(tempDoc);
-                }
-                using (FileStream newFile = File.Create(tempDoc))
-                {
-                    byte[] toWrite = new UTF8Encoding(true).GetBytes(richTextBox2.Text);
-                    newFile.Write(toWrite, 0, toWrite.Length);
-                }
-                var tempRtf = "";
-                Task.WaitAll(Task.Run(() => DocConvert.toRtf(tempDoc, target, out tempRtf)));
-                rtbInfo.Rtf = File.ReadAllText(tempRtf);
             }
-            catch { };
+            catch
+            {
+                // Ignore invalid RTF while the editor is updating.
+            }
         }
 
         private void rtbInfo_LinkClicked(object sender, LinkClickedEventArgs e)
@@ -3440,7 +3425,6 @@ namespace Grimoire.UI
             {
                 //"cmd":"aura++","auras":[{"nam":"Counter Attack"
                 //prepares a counter attack!!
-                string c1 = "\"cmd\":\"aura++\",\"auras\":[{\"nam\":\"Counter Attack\"";
                 string c2 = "prepares a counter attack";
                 if (msg.Contains(c2))
                 {

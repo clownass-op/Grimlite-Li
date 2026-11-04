@@ -13,7 +13,6 @@ using Grimoire.Game.Data;
 using System.Runtime.InteropServices;
 using System.Collections.Generic;
 using System.Drawing;
-using System.Diagnostics;
 using DarkUI.Controls;
 using System.Reflection;
 using System.Linq;
@@ -275,7 +274,7 @@ namespace Grimoire.UI
                         OptionsManager.LoginUsername = username;
                         OptionsManager.LoginPassword = password;
                         
-                        AutoRelogin.Login(serverObj, 15000, new System.Threading.CancellationTokenSource(), ensureSuccess: false);
+                        await AutoRelogin.Login(serverObj, 15000, new System.Threading.CancellationTokenSource(), ensureSuccess: false);
                         Debug.WriteLine($"[SPAWNED] Login triggered");
 
                         // STEP 4: Wait for login to complete (max 30 seconds)

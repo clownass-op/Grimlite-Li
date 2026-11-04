@@ -12,10 +12,66 @@ namespace Grimoire.Tools.Wiki
 {
     public static class WikiScraper
     {
+        static WikiScraper()
+        {
+            // HtmlWeb uses HttpWebRequest; raise the per-host connection cap to match four category loads with up to eight page requests each.
+            ServicePointManager.DefaultConnectionLimit = 8;
+        }
+
+        // Wikidot can reset connections when too many requests arrive together.
+        private static readonly SemaphoreSlim RequestSemaphore = new SemaphoreSlim(3);
+        private const int RequestSpacingMilliseconds = 350;
+        private const int RequestTimeoutMilliseconds = 15000;
+        private const int CircuitFailureThreshold = 5;
+        private static readonly TimeSpan CircuitBreakDuration = TimeSpan.FromSeconds(60);
+        private static readonly object CircuitBreakerLock = new object();
+        private static int _consecutiveRequestFailures;
+        private static DateTime _circuitOpenUntilUtc = DateTime.MinValue;
+
+        private sealed class WikiCircuitOpenException : Exception
+        {
+            public WikiCircuitOpenException(string message) : base(message) { }
+        }
+
+        private static void EnsureCircuitClosed()
+        {
+            lock (CircuitBreakerLock)
+            {
+                if (DateTime.UtcNow < _circuitOpenUntilUtc)
+                    throw new WikiCircuitOpenException($"Wiki requests paused until {_circuitOpenUntilUtc.ToLocalTime():HH:mm:ss}.");
+            }
+        }
+
+        private static void RecordRequestSuccess()
+        {
+            lock (CircuitBreakerLock)
+                _consecutiveRequestFailures = 0;
+        }
+
+        private static void RecordRequestFailure()
+        {
+            bool opened = false;
+            DateTime reopenAt = DateTime.MinValue;
+
+            lock (CircuitBreakerLock)
+            {
+                _consecutiveRequestFailures++;
+                if (_consecutiveRequestFailures >= CircuitFailureThreshold && DateTime.UtcNow >= _circuitOpenUntilUtc)
+                {
+                    _circuitOpenUntilUtc = DateTime.UtcNow.Add(CircuitBreakDuration);
+                    reopenAt = _circuitOpenUntilUtc;
+                    opened = true;
+                }
+            }
+
+            if (opened)
+                Logd($"Circuit breaker OPEN: {_consecutiveRequestFailures} consecutive request failures. Pausing wiki traffic for {(int)CircuitBreakDuration.TotalSeconds}s (until {reopenAt.ToLocalTime():HH:mm:ss}).");
+        }
+
         public static event Action<string> Log;
         private static void Logd(string msg) => Log?.Invoke(msg);
 
-        private const string BaseUrl = "http://aqwwiki.wikidot.com";
+        private const string BaseUrl = "https://aqwwiki.wikidot.com";
         private static readonly HashSet<string> GenderedCategories = new HashSet<string>(StringComparer.OrdinalIgnoreCase)
         {
             "Armor", "Class"
@@ -78,7 +134,8 @@ namespace Grimoire.Tools.Wiki
         {
             var web = new HtmlWeb
             {
-                UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+                UserAgent = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                RequestTimeout = RequestTimeoutMilliseconds
             };
 
             web.PreRequest = request =>
@@ -130,45 +187,45 @@ namespace Grimoire.Tools.Wiki
         {
             var results = new List<WikiEntry>();
             var seenSlugs = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
-            HtmlWeb web = CreateWebClient();
-
             Logd($"Scraping category list: {categorySlug}");
 
             string firstUrl = $"{BaseUrl}/{categorySlug}";
             HtmlDocument firstDoc;
             try
             {
-                firstDoc = await web.LoadFromWebAsync(firstUrl);
-                Logd($"Fetch completed — StatusCode: {web.StatusCode}, ResponseUri: {web.ResponseUri}, NodeCount: {firstDoc.DocumentNode.ChildNodes.Count}");
+                firstDoc = await LoadDocumentWithRetryAsync(firstUrl, $"category '{categorySlug}'").ConfigureAwait(false);
+                if (firstDoc == null)
+                    return null;
+                Logd($"Fetch completed — NodeCount: {firstDoc.DocumentNode.ChildNodes.Count}");
             }
             catch (Exception ex)
             {
                 Logd($"EXCEPTION loading '{categorySlug}': {ex.GetType().Name}: {ex.Message}");
-                return results;
+                return null;
             }
 
             AddCategoryItems(firstDoc, type, results, seenSlugs);
-            int maxPage = GetMaxPage(firstDoc);
+            List<string> pageUrls = GetPageUrls(firstDoc, firstUrl);
 
-            Logd($"'{categorySlug}' has {maxPage} page(s) — page 1 yielded {results.Count} so far");
+            Logd($"'{categorySlug}' has {pageUrls.Count + 1} page URL(s) — page 1 yielded {results.Count} so far");
 
-            if (maxPage > 1)
+            if (pageUrls.Count > 0)
             {
-                using (var semaphore = new SemaphoreSlim(4))
+                using (var semaphore = new SemaphoreSlim(8))
                 {
                     var tasks = new List<Task<HtmlDocument>>();
-                    for (int page = 2; page <= maxPage; page++)
+                    foreach (string pageUrl in pageUrls)
+                        tasks.Add(FetchPageThrottled(pageUrl, semaphore));
+
+                    HtmlDocument[] pageDocs = await Task.WhenAll(tasks).ConfigureAwait(false);
+                    if (pageDocs.Any(doc => doc == null))
                     {
-                        int pageNum = page;
-                        tasks.Add(FetchPageThrottled(web, $"{BaseUrl}/{categorySlug}/p/{pageNum}", semaphore));
+                        Logd($"Category '{categorySlug}' was only partially retrieved. Leaving it retryable instead of marking incomplete results as loaded.");
+                        return null;
                     }
 
-                    HtmlDocument[] pageDocs = await Task.WhenAll(tasks);
-                    foreach (var doc in pageDocs)
-                    {
-                        if (doc != null)
-                            AddCategoryItems(doc, type, results, seenSlugs);
-                    }
+                    foreach (HtmlDocument doc in pageDocs)
+                        AddCategoryItems(doc, type, results, seenSlugs);
                 }
             }
 
@@ -176,19 +233,68 @@ namespace Grimoire.Tools.Wiki
             return results;
         }
 
-        private static async Task<HtmlDocument> FetchPageThrottled(HtmlWeb web, string url, SemaphoreSlim semaphore)
+        private static async Task<HtmlDocument> LoadDocumentWithRetryAsync(string url, string context)
         {
-            await semaphore.WaitAsync();
+            const int maxAttempts = 4;
+
+            for (int attempt = 1; attempt <= maxAttempts; attempt++)
+            {
+                EnsureCircuitClosed();
+                await RequestSemaphore.WaitAsync().ConfigureAwait(false);
+                try
+                {
+                    EnsureCircuitClosed();
+
+                    HtmlWeb web = CreateWebClient();
+                    HtmlDocument doc = await web.LoadFromWebAsync(url).ConfigureAwait(false);
+                    if (doc == null || doc.DocumentNode == null || doc.DocumentNode.ChildNodes.Count == 0)
+                        throw new InvalidOperationException("The server returned an empty document.");
+
+                    RecordRequestSuccess();
+                    if (attempt > 1)
+                        Logd($"Recovered {context} on attempt {attempt}/{maxAttempts}.");
+
+                    return doc;
+                }
+                catch (WikiCircuitOpenException)
+                {
+                    throw;
+                }
+                catch (Exception ex)
+                {
+                    RecordRequestFailure();
+                    Logd($"Attempt {attempt}/{maxAttempts} failed for {context}: {ex.GetType().Name}: {ex.Message}");
+                    if (attempt == maxAttempts)
+                        break;
+
+                    int retryDelay = 2000 * (1 << (attempt - 1));
+                    Logd($"Backing off {retryDelay / 1000}s before retrying {context}.");
+                    await Task.Delay(retryDelay).ConfigureAwait(false);
+                }
+                finally
+                {
+                    await Task.Delay(RequestSpacingMilliseconds).ConfigureAwait(false);
+                    RequestSemaphore.Release();
+                }
+            }
+
+            Logd($"Giving up on {context} after {maxAttempts} attempts: {url}");
+            return null;
+        }
+
+        private static async Task<HtmlDocument> FetchPageThrottled(string url, SemaphoreSlim semaphore)
+        {
+            await semaphore.WaitAsync().ConfigureAwait(false);
             try
             {
-                await Task.Delay(150);
-                var doc = await web.LoadFromWebAsync(url);
-                Logd($"Fetched page: {url}");
+                HtmlDocument doc = await LoadDocumentWithRetryAsync(url, "category page").ConfigureAwait(false);
+                if (doc != null)
+                    Logd($"Fetched page: {url}");
                 return doc;
             }
             catch (Exception ex)
             {
-                Logd($"Failed to load page '{url}': {ex.Message}");
+                Logd($"Failed to load page '{url}' after retries: {ex.Message}");
                 return null;
             }
             finally
@@ -197,30 +303,70 @@ namespace Grimoire.Tools.Wiki
             }
         }
 
-        private static int GetMaxPage(HtmlDocument doc)
+        private static List<string> GetPageUrls(HtmlDocument doc, string currentUrl)
         {
-            var pagerLinks = doc.DocumentNode.SelectNodes("//div[contains(@class,'pager')]//a");
+            var pagerLinks = doc.DocumentNode.SelectNodes("//div[contains(@class,'pager')]//a[@href]");
             if (pagerLinks == null || pagerLinks.Count == 0)
             {
                 Logd("No pager found on page — treating as single-page category");
-                return 1;
+                return new List<string>();
             }
 
-            int max = 1;
+            Uri baseUri = new Uri(currentUrl);
+            Dictionary<string, Uri> pageTemplates = new Dictionary<string, Uri>(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, string> pagePrefixes = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+            Dictionary<string, int> maxPages = new Dictionary<string, int>(StringComparer.OrdinalIgnoreCase);
+
             foreach (var link in pagerLinks)
             {
-                string text = link.InnerText.Trim();
-                if (int.TryParse(text, out int pageNum) && pageNum > max)
-                    max = pageNum;
-
                 string href = link.GetAttributeValue("href", "");
-                var match = Regex.Match(href, @"/p/(\d+)");
-                if (match.Success && int.TryParse(match.Groups[1].Value, out int hrefPage) && hrefPage > max)
-                    max = hrefPage;
+                if (!Uri.TryCreate(baseUri, href, out Uri pageUri)
+                    || !pageUri.Host.Equals(baseUri.Host, StringComparison.OrdinalIgnoreCase))
+                    continue;
+
+                Match match = Regex.Match(pageUri.AbsolutePath, @"^(?<prefix>.+)/p/(?<page>\d+)/?$", RegexOptions.IgnoreCase);
+                if (!match.Success || !int.TryParse(match.Groups["page"].Value, out int pageNumber))
+                    continue;
+
+                string prefix = match.Groups["prefix"].Value;
+                UriBuilder normalized = new UriBuilder(pageUri)
+                {
+                    Scheme = Uri.UriSchemeHttps,
+                    Port = -1,
+                    Fragment = string.Empty
+                };
+
+                string key = normalized.Uri.GetLeftPart(UriPartial.Authority) + prefix + normalized.Query;
+                pageTemplates[key] = normalized.Uri;
+                pagePrefixes[key] = prefix;
+
+                if (!maxPages.TryGetValue(key, out int currentMax) || pageNumber > currentMax)
+                    maxPages[key] = pageNumber;
             }
 
-            Logd($"Pager detected — highest page number found: {max}");
-            return max;
+            const int maxPageRequests = 500;
+            List<string> pageUrls = new List<string>();
+            foreach (KeyValuePair<string, int> pageGroup in maxPages)
+            {
+                Uri template = pageTemplates[pageGroup.Key];
+                string prefix = pagePrefixes[pageGroup.Key];
+
+                for (int page = 2; page <= pageGroup.Value && pageUrls.Count < maxPageRequests; page++)
+                {
+                    UriBuilder builder = new UriBuilder(template)
+                    {
+                        Path = $"{prefix}/p/{page}",
+                        Fragment = string.Empty
+                    };
+                    pageUrls.Add(builder.Uri.AbsoluteUri);
+                }
+
+                if (pageUrls.Count >= maxPageRequests)
+                    break;
+            }
+
+            Logd($"Pager detected — {pageUrls.Count} additional page URL(s) found across {maxPages.Count} list(s)");
+            return pageUrls;
         }
 
         private static void AddCategoryItems(HtmlDocument doc, WikiEntryType type, List<WikiEntry> results, HashSet<string> seenSlugs)
@@ -314,13 +460,15 @@ namespace Grimoire.Tools.Wiki
             {
                 Logd($"Scraping detail: {entry.WikiUrl}");
 
-                HtmlWeb web = CreateWebClient();
-                HtmlDocument doc = await web.LoadFromWebAsync(entry.WikiUrl);
+                HtmlDocument doc = await LoadDocumentWithRetryAsync(entry.WikiUrl, $"detail '{entry.Name}'").ConfigureAwait(false);
+
+                if (doc == null)
+                    return entry;
 
                 string pageText = doc.DocumentNode.InnerText;
                 if (pageText.Contains("usually refers to") || pageText.Contains("disambiguation"))
                 {
-                    doc = await ResolveDisambiguationAsync(web, doc, entry.Name) ?? doc;
+                    doc = await ResolveDisambiguationAsync(doc, entry.Name).ConfigureAwait(false) ?? doc;
                 }
 
                 var pageContent = FindPageContent(doc, $"detail: {entry.Name}");
@@ -2650,7 +2798,7 @@ namespace Grimoire.Tools.Wiki
             return lines;
         }
 
-        private static async Task<HtmlDocument> ResolveDisambiguationAsync(HtmlWeb web, HtmlDocument doc, string expectedName)
+        private static async Task<HtmlDocument> ResolveDisambiguationAsync(HtmlDocument doc, string expectedName)
         {
             Logd("Detected disambiguation page, resolving...");
 
@@ -2668,7 +2816,7 @@ namespace Grimoire.Tools.Wiki
 
                 try
                 {
-                    var candidate = await web.LoadFromWebAsync($"{BaseUrl}{href}");
+                    HtmlDocument candidate = await LoadDocumentWithRetryAsync($"{BaseUrl}{href}", $"disambiguation target '{linkText}'").ConfigureAwait(false);
                     if (candidate.DocumentNode.SelectSingleNode("//div[contains(@class,'page-content')]") != null)
                     {
                         Logd($"Disambiguation resolved to: {BaseUrl}{href}");

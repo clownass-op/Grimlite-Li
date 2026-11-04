@@ -28,7 +28,7 @@ namespace Grimoire.Game.Data
 
         public void Accept(int questId) => Flash.Call("Accept", questId.ToString());
 
-        public void Accept(string questId) => Proxy.Instance.SendToServer($"%xt%zm%acceptQuest%1%{questId}");
+        public void Accept(string questId) => _ = Proxy.Instance.SendToServer($"%xt%zm%acceptQuest%1%{questId}");
 
         public void Complete(int questId) => Flash.Call("Complete", questId.ToString());
 

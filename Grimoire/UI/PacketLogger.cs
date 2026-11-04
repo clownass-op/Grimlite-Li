@@ -13,7 +13,7 @@ namespace Grimoire.UI
 {
     public class PacketLogger : DarkForm
     {
-        private IContainer components;
+        private IContainer components = null;
 
         private DarkTextBox txtPackets;
 

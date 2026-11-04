@@ -30,6 +30,38 @@
         <SolidColorBrush x:Key="WikiTabIdleText" Color="#9A9AA3" />
         <SolidColorBrush x:Key="WikiTabActiveBg" Color="#E11D48" />
 
+        <Style x:Key="LoadAllButton" TargetType="Button">
+            <Setter Property="Background" Value="{StaticResource Raised}" />
+            <Setter Property="Foreground" Value="{StaticResource TextHi}" />
+            <Setter Property="BorderBrush" Value="{StaticResource Hairline}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="Cursor" Value="Hand" />
+            <Setter Property="Template">
+                <Setter.Value>
+                    <ControlTemplate TargetType="Button">
+                        <Border x:Name="bd" Background="{TemplateBinding Background}"
+                                BorderBrush="{TemplateBinding BorderBrush}"
+                                BorderThickness="{TemplateBinding BorderThickness}"
+                                CornerRadius="5">
+                            <ContentPresenter HorizontalAlignment="Center" VerticalAlignment="Center"
+                                              Margin="{TemplateBinding Padding}" />
+                        </Border>
+                        <ControlTemplate.Triggers>
+                            <Trigger Property="IsMouseOver" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{StaticResource RaisedHover}" />
+                            </Trigger>
+                            <Trigger Property="IsPressed" Value="True">
+                                <Setter TargetName="bd" Property="Background" Value="{StaticResource AccentDeep}" />
+                            </Trigger>
+                            <Trigger Property="IsEnabled" Value="False">
+                                <Setter TargetName="bd" Property="Opacity" Value="0.55" />
+                            </Trigger>
+                        </ControlTemplate.Triggers>
+                    </ControlTemplate>
+                </Setter.Value>
+            </Setter>
+        </Style>
+
         <Style x:Key="SpinnerArc" TargetType="Path">
             <Setter Property="Width" Value="18" />
             <Setter Property="Height" Value="18" />
@@ -336,9 +368,19 @@
                     </Grid>
                 </Border>
 
-                <TextBlock x:Name="txtCount" DockPanel.Dock="Top" Text=""
-                           FontSize="10.5" FontFamily="Consolas" Foreground="{StaticResource TextLow}"
-                           Margin="2,0,0,10" Visibility="Collapsed" />
+                <Grid DockPanel.Dock="Top" Margin="2,0,0,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="txtCount" Grid.Column="0" Text=""
+                               FontSize="10.5" FontFamily="Consolas" Foreground="{StaticResource TextLow}"
+                               VerticalAlignment="Center" />
+                    <Button x:Name="btnLoadAll" Grid.Column="1" Content="↓ Load All"
+                            Style="{StaticResource LoadAllButton}"
+                            Click="LoadAllCategories_Click" Padding="10,5" FontSize="11"
+                            HorizontalAlignment="Right" />
+                </Grid>
 
                 <Border DockPanel.Dock="Top" BorderBrush="{StaticResource Hairline}"
                         BorderThickness="0,0,0,1" Margin="1,0,0,10" />
@@ -417,22 +459,27 @@
                                                 </Button.Template>
                                                 <Grid>
                                                     <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
                                                         <ColumnDefinition Width="*" />
                                                         <ColumnDefinition Width="Auto" />
                                                         <ColumnDefinition Width="Auto" />
                                                     </Grid.ColumnDefinitions>
 
-                                                    <TextBlock x:Name="nameText" Grid.Column="0" Text="{Binding Name}"
+                                                    <TextBlock Grid.Column="0" Text="{Binding CategoryIcon}"
+                                                               FontSize="13" Width="22" VerticalAlignment="Center"
+                                                               TextAlignment="Center" Margin="0,0,6,0" />
+
+                                                    <TextBlock x:Name="nameText" Grid.Column="1" Text="{Binding Name}"
                                                                Foreground="{StaticResource TextHi}"
                                                                FontFamily="Segoe UI Semibold" FontSize="13"
                                                                VerticalAlignment="Center" />
 
-                                                    <Path x:Name="loadingSpinner" Grid.Column="1"
+                                                    <Path x:Name="loadingSpinner" Grid.Column="2"
                                                           Style="{StaticResource SpinnerArc}" Width="13" Height="13" StrokeThickness="2"
                                                           Stroke="White" Margin="6,0,4,0" VerticalAlignment="Center"
                                                           Visibility="Collapsed" />
 
-                                                    <TextBlock x:Name="statusText" Grid.Column="2" Text="{Binding StatusText}"
+                                                    <TextBlock x:Name="statusText" Grid.Column="3" Text="{Binding StatusText}"
                                                                Foreground="{StaticResource TextLow}"
                                                                FontFamily="Consolas" FontSize="10.5"
                                                                VerticalAlignment="Center" Margin="0,0,4,0" />
@@ -456,6 +503,19 @@
                                                            Foreground="{StaticResource Accent}" />
                                             </Button>
                                         </Grid>
+
+                                        <ProgressBar Height="3" Margin="16,0,8,5" IsIndeterminate="True">
+                                            <ProgressBar.Style>
+                                                <Style TargetType="ProgressBar">
+                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding IsLoading}" Value="True">
+                                                            <Setter Property="Visibility" Value="Visible" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </ProgressBar.Style>
+                                        </ProgressBar>
 
                                         <ListBox ItemsSource="{Binding FilteredEntries}"
                                                  DisplayMemberPath="Name"
@@ -524,6 +584,7 @@
                                                                 <Grid>
                                                                     <Grid.ColumnDefinitions>
                                                                         <ColumnDefinition Width="Auto" />
+                                                                        <ColumnDefinition Width="Auto" />
                                                                         <ColumnDefinition Width="*" />
                                                                         <ColumnDefinition Width="Auto" />
                                                                         <ColumnDefinition Width="Auto" />
@@ -531,14 +592,17 @@
                                                                     <TextBlock x:Name="childChevronText" Grid.Column="0" Text="{Binding ChevronGlyph}"
                                                                                Foreground="{StaticResource TextMid}" FontSize="10"
                                                                                Width="14" VerticalAlignment="Center" />
-                                                                    <TextBlock x:Name="childNameText" Grid.Column="1" Text="{Binding Name}"
+                                                                    <TextBlock Grid.Column="1" Text="{Binding CategoryIcon}"
+                                                                               FontSize="12" Width="20" VerticalAlignment="Center"
+                                                                               TextAlignment="Center" Margin="0,0,5,0" />
+                                                                    <TextBlock x:Name="childNameText" Grid.Column="2" Text="{Binding Name}"
                                                                                Foreground="{StaticResource TextHi}"
                                                                                FontSize="12.5" VerticalAlignment="Center" />
-                                                                     <Path x:Name="childLoadingSpinner" Grid.Column="2"
+                                                                     <Path x:Name="childLoadingSpinner" Grid.Column="3"
                                                                            Style="{StaticResource SpinnerArc}" Width="11" Height="11" StrokeThickness="1.5"
                                                                            Stroke="White" Margin="6,0,4,0" VerticalAlignment="Center"
                                                                            Visibility="Collapsed" />
-                                                                    <TextBlock x:Name="childStatusText" Grid.Column="3" Text="{Binding StatusText}"
+                                                                    <TextBlock x:Name="childStatusText" Grid.Column="4" Text="{Binding StatusText}"
                                                                                Foreground="{StaticResource TextLow}"
                                                                                FontFamily="Consolas" FontSize="10"
                                                                                VerticalAlignment="Center" Margin="0,0,4,0" />
@@ -562,6 +626,19 @@
                                                                            Foreground="{StaticResource Accent}" />
                                                             </Button>
                                                         </Grid>
+
+                                                        <ProgressBar Height="2" Margin="14,0,8,4" IsIndeterminate="True">
+                                                            <ProgressBar.Style>
+                                                                <Style TargetType="ProgressBar">
+                                                                    <Setter Property="Visibility" Value="Collapsed" />
+                                                                    <Style.Triggers>
+                                                                        <DataTrigger Binding="{Binding IsLoading}" Value="True">
+                                                                            <Setter Property="Visibility" Value="Visible" />
+                                                                        </DataTrigger>
+                                                                    </Style.Triggers>
+                                                                </Style>
+                                                            </ProgressBar.Style>
+                                                        </ProgressBar>
 
                                                         <ListBox ItemsSource="{Binding FilteredEntries}"
                                                                  DisplayMemberPath="Name"

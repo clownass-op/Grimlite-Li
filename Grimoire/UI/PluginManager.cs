@@ -11,7 +11,7 @@ namespace Grimoire.UI
 {
 	public class PluginManager : DarkForm
 	{
-		private IContainer components;
+		private IContainer components = null;
 		public DarkGroupBox gbLoaded;
 		public DarkButton btnUnload;
 		public DarkTextBox txtDesc;

@@ -179,7 +179,7 @@ namespace Grimoire.Botting
         {
             if (!IsRunning)
             {
-                ApplySettings();
+                _ = ApplySettings();
             }
         }
 

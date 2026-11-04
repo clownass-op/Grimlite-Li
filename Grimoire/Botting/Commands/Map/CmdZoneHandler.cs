@@ -16,9 +16,6 @@ namespace Grimoire.Botting.Commands.Map
     /// </summary>
     public class CmdZoneHandler : IBotCommand, IJsonMessageHandler
     {
-        private string _targetZone = "";
-        private string _moveX = "0";
-        private string _moveY = "0";
         private bool _zoneMatched = false;
         private bool _movedToPosition = false;
         private string _currentZone = "";

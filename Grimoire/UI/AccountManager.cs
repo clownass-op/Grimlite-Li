@@ -80,7 +80,6 @@ namespace Grimoire.UI
         private DarkButton btnRemoveSelected;
         private DarkButton btnStartAll;
         private DarkLabel lblSelectedTop;
-        private DarkLabel lblSelectedCount;
         private DarkNumericUpDown nudColumns;
         public DarkTextBox tbWebhook;
         private FlowLayoutPanel flowServers;
@@ -118,8 +117,6 @@ namespace Grimoire.UI
         private DarkTextBox tbNewPassword;
         private DarkTextBox tbNewDisplayName;
         private DarkButton btnAddAccount;
-        private DarkLabel lblAddHint;
-        private DarkGroupBox gbAddAccountTop;
         private HashSet<int> _selected = new HashSet<int>();
 
         // Script selector
@@ -951,9 +948,8 @@ namespace Grimoire.UI
             
             //LogForm.Instance.AppendDebug("[FORM LOAD] Server load completed");
         }
-        catch (Exception ex)
+        catch (Exception)
         {
-            //LogForm.Instance.AppendDebug($"[FORM LOAD] Exception during server fetch: {ex.Message}");
             //LogForm.Instance.AppendDebug($"[FORM LOAD] Stack: {ex.StackTrace}");
             // Load defaults on exception too
             try { LoadDefaultServers(); } catch { }
@@ -1492,9 +1488,8 @@ namespace Grimoire.UI
                             }
                         }
                     }
-                    catch (Exception ex)
+                    catch (Exception)
                     {
-                        //LogForm.Instance.AppendDebug($"[SERVER FETCH] Parse error: {ex.Message}");
                         //LogForm.Instance.AppendDebug($"[SERVER FETCH] Stack trace: {ex.StackTrace}");
                         retryCount++;
                         
@@ -1506,9 +1501,8 @@ namespace Grimoire.UI
                         }
                     }
                 }
-                catch (Exception ex)
+                catch (Exception)
                 {
-                    //LogForm.Instance.AppendDebug($"[SERVER FETCH] Fetch error: {ex.Message}");
                     //LogForm.Instance.AppendDebug($"[SERVER FETCH] Stack trace: {ex.StackTrace}");
                     retryCount++;
                     
@@ -1678,9 +1672,8 @@ namespace Grimoire.UI
                 
                 //LogForm.Instance.AppendDebug("[ON SERVERS LOADED] Completed successfully");
             }
-            catch (Exception ex)
+            catch (Exception)
             {
-                //LogForm.Instance.AppendDebug($"[ON SERVERS LOADED] Error: {ex.Message}");
                 //LogForm.Instance.AppendDebug($"[ON SERVERS LOADED] Stack: {ex.StackTrace}");
             }
         }
@@ -1975,17 +1968,18 @@ namespace Grimoire.UI
                         OptionsManager.LoginPassword = password;
                         
                         // Delay login to let UI message loop process first
-                        Task.Delay(500).ContinueWith(_ =>
+                        _ = Task.Run(async () =>
                         {
-                            AutoRelogin.Login(server, 15000, new System.Threading.CancellationTokenSource(), ensureSuccess: false);
+                            await Task.Delay(500).ConfigureAwait(false);
+                            await AutoRelogin.Login(server, 15000, new System.Threading.CancellationTokenSource(), ensureSuccess: false).ConfigureAwait(false);
                             Debug.WriteLine($"Login request sent for first account: {username}");
-                        }, TaskScheduler.Default);
+                        });
                         
                         // Load script in background once logged in (non-blocking)
                         if (cbStartWithScript.Checked && !string.IsNullOrEmpty(tbScriptPath.Text) && File.Exists(tbScriptPath.Text))
                         {
                             var scriptPath = tbScriptPath.Text;
-                            Task.Run(async () =>
+                            _ = Task.Run(async () =>
                             {
                                 try
                                 {
@@ -2137,17 +2131,18 @@ namespace Grimoire.UI
                         OptionsManager.LoginPassword = password;
                         
                         // Delay login to let UI message loop process first
-                        Task.Delay(500).ContinueWith(_ =>
+                        _ = Task.Run(async () =>
                         {
-                            AutoRelogin.Login(server, 15000, new System.Threading.CancellationTokenSource(), ensureSuccess: false);
+                            await Task.Delay(500).ConfigureAwait(false);
+                            await AutoRelogin.Login(server, 15000, new System.Threading.CancellationTokenSource(), ensureSuccess: false).ConfigureAwait(false);
                             Debug.WriteLine($"Login request sent for first account: {username}");
-                        }, TaskScheduler.Default);
+                        });
                         
                         // Load script in background once logged in (non-blocking)
                         if (cbStartWithScript.Checked && !string.IsNullOrEmpty(tbScriptPath.Text) && File.Exists(tbScriptPath.Text))
                         {
                             var scriptPath = tbScriptPath.Text;
-                            Task.Run(async () =>
+                            _ = Task.Run(async () =>
                             {
                                 try
                                 {
